@@ -18,6 +18,7 @@ env/
 data/raw/
 data/processed/
 data/chroma/
+data/documents/
 
 # IDE
 .vscode/
