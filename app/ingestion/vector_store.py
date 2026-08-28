@@ -29,11 +29,13 @@ class VectorStore:
         self,
         query_embedding: list[float],
         n_results: int = 3,
+        where: dict | None = None,
     ) -> dict:
         return self.collection.query(
             query_embeddings=[query_embedding],
             n_results=n_results,
-        )
+            where=where,
+    )
 
     def reset(self) -> None:
         self.client.delete_collection("researchdesk")
