@@ -1,0 +1,7 @@
+google-genai
+python-dotenv
+sentence-transformers
+chromadb
+streamlit
+pypdf
+scikit-learn
