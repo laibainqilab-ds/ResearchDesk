@@ -1,46 +1,30 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
+import os
+
+from dotenv import load_dotenv
+from google import genai
+
+
+load_dotenv()
 
 
 class Generator:
     def __init__(self):
-        model_name = "Qwen/Qwen2.5-1.5B-Instruct"
+        api_key = os.getenv("GEMINI_API_KEY")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float32,
-        )
-
-    def generate(self, prompt: str) -> str:
-        messages = [
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ]
-
-        text = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-
-        inputs = self.tokenizer(
-            text,
-            return_tensors="pt",
-        )
-
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=100,
-                do_sample=False,
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API_KEY is not set. "
+                "Add it to the .env file."
             )
 
-        generated_tokens = outputs[0][inputs["input_ids"].shape[1]:]
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = model_name
 
-        return self.tokenizer.decode(
-            generated_tokens,
-            skip_special_tokens=True,
+    def generate(self, prompt: str) -> str:
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
         )
+
+        return response.text
