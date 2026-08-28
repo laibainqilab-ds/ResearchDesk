@@ -1,94 +1,97 @@
+import json
 import logging
 import os
+import urllib.error
+import urllib.request
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import errors
 
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_OLLAMA_BASE_URL = "https://wish-excited-organizational-difficulties.trycloudflare.com"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:9b"
+
+REQUEST_TIMEOUT_SECONDS = 180
+
 
 class GenerationUnavailableError(Exception):
-    """Raised when the Gemini API cannot fulfill a generation request.
+    """Raised when the remote Ollama/Qwen server cannot fulfill a generation request.
 
-    Wraps quota/rate-limit and other API-level failures so callers can
-    degrade gracefully instead of crashing. The original exception is kept
+    Wraps connection, timeout, HTTP, and malformed-response failures so callers
+    can degrade gracefully instead of crashing. The original exception is kept
     on `.original` for logging/debugging.
     """
 
-    def __init__(self, message: str, *, quota_exceeded: bool, original: Exception):
+    def __init__(self, message: str, *, original: Exception | None = None):
         super().__init__(message)
-        self.quota_exceeded = quota_exceeded
         self.original = original
-
-
-def _is_quota_error(error: errors.APIError) -> bool:
-    status = (getattr(error, "status", None) or "").upper()
-
-    return error.code == 429 or status == "RESOURCE_EXHAUSTED"
 
 
 class Generator:
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-        model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-
-        if not api_key:
-            raise ValueError(
-                "GEMINI_API_KEY is not set. "
-                "Add it to the .env file."
-            )
-
-        self.client = genai.Client(api_key=api_key)
-        self.model_name = model_name
+        self.base_url = os.getenv("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL).rstrip("/")
+        self.model_name = os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
 
     def generate(self, prompt: str) -> str:
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-            )
-        except errors.ClientError as error:
-            quota_exceeded = _is_quota_error(error)
+        payload = json.dumps(
+            {
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False,
+            }
+        ).encode("utf-8")
 
+        request = urllib.request.Request(
+            f"{self.base_url}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+                raw_body = response.read()
+        except urllib.error.HTTPError as error:
             logger.warning(
-                "Gemini generation request failed (quota_exceeded=%s): %s",
-                quota_exceeded,
+                "Ollama generation request failed with HTTP %s: %s",
+                error.code,
                 error,
             )
-
-            if quota_exceeded:
-                message = (
-                    "The answer-generation service has reached its usage "
-                    "quota. Please try again later."
-                )
-            else:
-                message = (
-                    "The answer-generation service rejected this request "
-                    "and could not generate an answer."
-                )
-
             raise GenerationUnavailableError(
-                message,
-                quota_exceeded=quota_exceeded,
+                f"The answer-generation service returned an error "
+                f"(HTTP {error.code}) and could not generate an answer.",
                 original=error,
             ) from error
-        except errors.ServerError as error:
-            logger.warning("Gemini generation request failed: %s", error)
-
+        except OSError as error:
+            # Covers URLError (DNS/connection failures), TimeoutError, and
+            # other socket-level errors when the remote server is unreachable.
+            logger.warning("Ollama generation request failed: %s", error)
             raise GenerationUnavailableError(
-                (
-                    "The answer-generation service is temporarily "
-                    "unavailable. Please try again shortly."
-                ),
-                quota_exceeded=False,
+                "The answer-generation service is temporarily unreachable. "
+                "Please check the connection and try again.",
                 original=error,
             ) from error
 
-        return response.text
+        try:
+            body = json.loads(raw_body)
+        except json.JSONDecodeError as error:
+            logger.warning("Ollama returned malformed JSON: %s", raw_body[:200])
+            raise GenerationUnavailableError(
+                "The answer-generation service returned an unreadable response.",
+                original=error,
+            ) from error
+
+        if not isinstance(body, dict) or not isinstance(body.get("response"), str):
+            logger.warning("Ollama response missing 'response' field: %s", body)
+            raise GenerationUnavailableError(
+                "The answer-generation service returned an unexpected response format.",
+                original=None,
+            )
+
+        return body["response"].strip()
 
     def rewrite_query(
         self,
@@ -164,4 +167,3 @@ Search queries:
         ]
 
         return queries[:num_queries]
-

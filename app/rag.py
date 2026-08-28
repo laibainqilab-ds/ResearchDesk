@@ -256,7 +256,6 @@ Answer:
             logger.warning("Answer generation unavailable: %s", generation_error)
             answer = None
             error = {
-                "quota_exceeded": generation_error.quota_exceeded,
                 "message": str(generation_error),
             }
 
