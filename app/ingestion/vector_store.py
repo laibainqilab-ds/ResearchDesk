@@ -44,12 +44,33 @@ class VectorStore:
                 documents[document_id] = {
                     "document_id": document_id,
                     "filename": metadata.get("filename"),
+                    "file_type": metadata.get("file_type"),
                     "chunk_count": 0,
+                    "page_count": None,
                 }
 
             documents[document_id]["chunk_count"] += 1
 
+            page_number = metadata.get("page_number")
+
+            if page_number is not None:
+                current_max = documents[document_id]["page_count"] or 0
+                documents[document_id]["page_count"] = max(current_max, page_number)
+
         return list(documents.values())
+
+    def count_document_chunks(self, document_id: str) -> int:
+        """Number of chunks currently stored for a given document_id.
+
+        Used to detect whether a document (by content hash) is already indexed
+        before ingesting it again.
+        """
+        records = self.collection.get(where={"document_id": document_id})
+        return len(records["ids"])
+
+    def delete_document(self, document_id: str) -> None:
+        """Remove all chunks belonging to a single document, leaving others intact."""
+        self.collection.delete(where={"document_id": document_id})
 
     def search(
         self,

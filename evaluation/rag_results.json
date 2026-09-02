@@ -1,0 +1,560 @@
+[
+  {
+    "id": "q1",
+    "question": "What is Evo 2?",
+    "expected_answer": "Evo 2 is a genomic foundation model that learns DNA sequences through next-nucleotide prediction and can be used for both predicting variant effects and generating new DNA sequences.",
+    "should_abstain": false,
+    "actual_answer": "Evo 2 is a foundation model for genomic understanding and design trained once to read DNA for predictions and write new DNA sequences without needing to be retrained for either job. It serves across every branch of life using self-supervised methods to learn real biology patterns without requiring any hand-labeling.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6,
+        "rerank_score": 0.9783122539520264
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 10,
+        "chunk_id": 15,
+        "rerank_score": 0.8205147385597229
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0,
+        "rerank_score": 0.7228347063064575
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q2",
+    "question": "What are the four DNA bases?",
+    "expected_answer": "The four DNA bases are Adenine (A), Thymine (T), Guanine (G), and Cytosine (C).",
+    "should_abstain": false,
+    "actual_answer": "DNA is built from four basic building blocks called bases, represented by the letters A, T, G, and C. These letters stand for Adenine, Thymine, Guanine, and Cytosine.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 2,
+        "chunk_id": 2,
+        "rerank_score": 0.8820934295654297
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 1,
+        "rerank_score": 0.011451737023890018
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 7,
+        "rerank_score": 0.005770498886704445
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q3",
+    "question": "How many parameters do the two Evo 2 model versions have?",
+    "expected_answer": "Evo 2 has versions with 7 billion and 40 billion parameters.",
+    "should_abstain": false,
+    "actual_answer": "There are two versions of the Evo 2 model, one with 7 billion parameters and one with 40 billion parameters. The text confirms that the model was built in these two specific sizes for processing genomic data.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 0.9964027404785156
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10,
+        "rerank_score": 0.9720219969749451
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13,
+        "rerank_score": 0.5909222364425659
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q4",
+    "question": "How much DNA data was used to train Evo 2?",
+    "expected_answer": "The OpenGenome2 training dataset contains 9.3 trillion DNA letters.",
+    "should_abstain": false,
+    "actual_answer": "Evo 2 was trained on OpenGenome2, a dataset containing 9.3 trillion DNA letters pulled from every major branch of life. This training data includes information from bacteria, archaea, and eukaryotes, ranging from yeast to plants to humans.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 0.9941596984863281
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10,
+        "rerank_score": 0.9255157113075256
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13,
+        "rerank_score": 0.7453097701072693
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q5",
+    "question": "Why can't standard transformers efficiently process one million DNA tokens?",
+    "expected_answer": "Standard attention has quadratic computational growth with sequence length, making it extremely expensive for sequences containing around one million tokens.",
+    "should_abstain": false,
+    "actual_answer": "Standard transformers utilize standard attention that compares every single position in a sequence to every other position, causing computer work to increase quadratically instead of near-linearly. Consequently, this quadratic growth makes regular attention too expensive to train for sequences as long as a million tokens, making it unworkable for capturing long-distance DNA relationships.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 8,
+        "rerank_score": 0.9914348721504211
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 0.6493933200836182
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10,
+        "rerank_score": 0.5630388855934143
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q6",
+    "question": "What are SE, MR, and LI in Evo 2?",
+    "expected_answer": "SE stands for Short Explicit Hyena, MR stands for Medium Regularized Hyena, and LI stands for Long Implicit Hyena. They handle short-, medium-, and long-range patterns respectively.",
+    "should_abstain": false,
+    "actual_answer": "Based on the provided text, MR is defined as Medium Regularized Hyena and LI is defined as Long Implicit Hyena, but there is no mention of SE. MR handles patterns that are a bit farther apart, while LI is responsible for finding patterns over very long distances by creating the filter when needed.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 9,
+        "rerank_score": 0.8093031644821167
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5,
+        "rerank_score": 0.3402990698814392
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6,
+        "rerank_score": 0.2740822434425354
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q7",
+    "question": "How does Evo 2 learn from DNA?",
+    "expected_answer": "Evo 2 uses self-supervised next-nucleotide prediction. It predicts the next DNA letter and compares its prediction with the actual next letter using cross-entropy loss.",
+    "should_abstain": false,
+    "actual_answer": "Evo 2 learns by training the model to predict the next DNA letter at every position in a sequence without human labels, comparing its guess to what the real next letter actually was in the raw sequence. This self-supervised method forces the model to learn useful biological patterns and structures, such as codons and gene grammar, simply by attempting to guess the next letter accurately.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6,
+        "rerank_score": 0.9931190013885498
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5,
+        "rerank_score": 0.9718603491783142
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13,
+        "rerank_score": 0.9300568699836731
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q8",
+    "question": "What are the two major capabilities of Evo 2?",
+    "expected_answer": "Evo 2 can predict the effects of genetic variants and generate new DNA sequences.",
+    "should_abstain": false,
+    "actual_answer": "Evo 2's two major capabilities are predicting variant effects and generating new DNA sequences. The same trained model is used for both guessing outcomes and creating new sequences without needing to be retrained for either job.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5,
+        "rerank_score": 0.9989954829216003
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6,
+        "rerank_score": 0.8452543020248413
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 7,
+        "chunk_id": 12,
+        "rerank_score": 0.7774566411972046
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q9",
+    "question": "What AUROC score did Evo 2 achieve for BRCA1 mutation classification without additional training?",
+    "expected_answer": "Evo 2 achieved an AUROC of 0.95 for BRCA1 mutation classification without additional training.",
+    "should_abstain": false,
+    "actual_answer": "Evo 2 achieved an AUROC score of 0.95 for BRCA1 mutation classification with absolutely no extra training. This performance allows the model to tell apart harmful from harmless changes in the BRCA1 gene using its own built-in sense of what normal DNA looks like.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13,
+        "rerank_score": 0.9998840093612671
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5,
+        "rerank_score": 0.8116031289100647
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 10,
+        "chunk_id": 15,
+        "rerank_score": 0.7747980952262878
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q10",
+    "question": "What are some limitations of Evo 2?",
+    "expected_answer": "Its predictions are not medical decisions, it can potentially be misused for biological design, training requires substantial computing resources, and its performance varies across genes and mutation types.",
+    "should_abstain": false,
+    "actual_answer": "Evo 2 faces limitations such as its outputs being predictions that must be tested in a laboratory before affecting patient care, and the significant computing power required to train the model makes it unrealistic for most research labs. Furthermore, there is a genuine concern about misuse due to the model being fully open, and its accuracy varies depending on the specific type of gene or mutation within the datasets.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 9,
+        "chunk_id": 14,
+        "rerank_score": 0.9960528612136841
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5,
+        "rerank_score": 0.9815171360969543
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 0.9425826072692871
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q11",
+    "question": "What is Evo 2 used for in personalized medicine?",
+    "expected_answer": "It could potentially help predict whether a person's genetic variants are likely to be harmful.",
+    "should_abstain": false,
+    "actual_answer": "In personalized medicine, Evo 2 could predict whether a person's unique genetic variants are likely to be harmful. This application is described as an exciting future direction for models like Evo 2.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 9,
+        "chunk_id": 14,
+        "rerank_score": 0.9247865080833435
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6,
+        "rerank_score": 0.7141225934028625
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5,
+        "rerank_score": 0.4202007055282593
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q12",
+    "question": "What architecture does Evo 2 use?",
+    "expected_answer": "Evo 2 uses the StripedHyena 2 architecture, which combines Hyena operators with occasional regular attention.",
+    "should_abstain": false,
+    "actual_answer": "Evo 2 runs on the StripedHyena 2 architecture. This architecture allows the model to scale and is the reason a million-letter view at full detail is even possible.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 10,
+        "chunk_id": 15,
+        "rerank_score": 0.9625923037528992
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6,
+        "rerank_score": 0.6925292611122131
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 0.25500378012657166
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q13",
+    "question": "How does Evo 2 compare with GPT in terms of what it learns?",
+    "expected_answer": "Evo 2 applies next-token prediction to DNA sequences, while GPT applies next-token prediction to human language. Evo 2 learns patterns in DNA rather than patterns in human-written text.",
+    "should_abstain": false,
+    "actual_answer": "If GPT learned the language written by people, Evo 2 is learning the language written by four billion years of evolution. However, researchers are still actively figuring out whether genomic models will actually keep improving the same way language models have and how far this comparison really holds up.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 10,
+        "chunk_id": 15,
+        "rerank_score": 0.9948208332061768
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6,
+        "rerank_score": 0.9497215151786804
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5,
+        "rerank_score": 0.9156686663627625
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q14",
+    "question": "What species was used in the generalization test mentioned in the presentation?",
+    "expected_answer": "Evo 2 was able to label parts of the woolly mammoth genome despite having no training data specifically about mammoths.",
+    "should_abstain": false,
+    "actual_answer": "The provided context does not mention a specific generalization test or identify the particular species used for it. It does state that the model works across many different species, including bacteria, archaea, and eukaryotes.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 2,
+        "chunk_id": 3,
+        "rerank_score": 0.0015249388525262475
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 7,
+        "chunk_id": 11,
+        "rerank_score": 0.0012216996401548386
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 0.0009463432943448424
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q15",
+    "question": "How many GPUs were used to train the 40-billion-parameter Evo 2 model?",
+    "expected_answer": "The 40-billion-parameter model was trained using 1,024 GPUs.",
+    "should_abstain": false,
+    "actual_answer": "The 40-billion-parameter Evo 2 model was trained using 1,024 GPUs. This specific configuration allowed the model to train faster than both the previous version and a standard transformer.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10,
+        "rerank_score": 0.9999593496322632
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 0.9917541742324829
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 9,
+        "chunk_id": 14,
+        "rerank_score": 0.9734566807746887
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q16",
+    "question": "What is the capital of France?",
+    "expected_answer": null,
+    "should_abstain": true,
+    "actual_answer": "The provided text does not contain any information about the capital of France. It only details the Evo 2 foundation model and its capabilities for genomic understanding.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 7,
+        "chunk_id": 12,
+        "rerank_score": 3.744359491975047e-05
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0,
+        "rerank_score": 3.744263085536659e-05
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 8,
+        "rerank_score": 3.7434027035487816e-05
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q17",
+    "question": "Who is the current CEO of NVIDIA?",
+    "expected_answer": null,
+    "should_abstain": true,
+    "actual_answer": "The provided text does not contain information about who the current CEO of NVIDIA is. Although the script lists NVIDIA as a collaborating institution involved in developing the Evo 2 model, it does not mention any specific executive names or leadership titles.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4,
+        "rerank_score": 5.823037281516008e-05
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0,
+        "rerank_score": 5.033709021518007e-05
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 7,
+        "chunk_id": 12,
+        "rerank_score": 3.742021362995729e-05
+      }
+    ],
+    "error": null
+  },
+  {
+    "id": "q18",
+    "question": "What is the exact accuracy of Evo 2 on every possible human genetic mutation?",
+    "expected_answer": null,
+    "should_abstain": true,
+    "actual_answer": "According to the context, there is no single exact accuracy for every possible human genetic mutation because Evo 2 does not perform equally well on every type of gene or mutation. Independent studies found that its accuracy varies depending on the task, meaning researchers should always look beyond a single accuracy score when evaluating the model.",
+    "sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 9,
+        "chunk_id": 14,
+        "rerank_score": 0.8132398128509521
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10,
+        "rerank_score": 0.7655708193778992
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13,
+        "rerank_score": 0.48589026927948
+      }
+    ],
+    "error": null
+  }
+]
