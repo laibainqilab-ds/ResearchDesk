@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 import streamlit as st
@@ -13,6 +12,7 @@ from app.ingestion.pipeline import (
 )
 from app.models.generator import GenerationUnavailableError
 from app.rag import RAG
+from evaluation import report as evaluation_report
 
 
 DOCUMENTS_DIR = Path("data/documents")
@@ -590,15 +590,41 @@ elif page == "Retrieval Inspector":
 
 elif page == "Evaluation":
     st.header("Evaluation")
-    st.caption("Results from the most recently generated Phase 5 evaluation report.")
+    st.caption("Phase 5 retrieval evaluation, read from the generated report files in evaluation/.")
 
-    report_path = Path("evaluation/rag_report.json")
+    dataset_file = Path("evaluation/rag_evaluation.json")
 
-    if not report_path.exists():
+    st.subheader("Dataset overview")
+
+    if not dataset_file.exists():
+        st.info("evaluation/rag_evaluation.json not found -- dataset overview unavailable.")
+    else:
+        dataset_by_id = evaluation_report.load_dataset()
+        dataset_info = evaluation_report.build_dataset_summary(dataset_by_id)
+
+        column1, column2, column3, column4 = st.columns(4)
+        column1.metric("Total questions", dataset_info["total_questions"])
+        column2.metric("Answerable", dataset_info["answerable_questions"])
+        column3.metric("Unanswerable", dataset_info["unanswerable_questions"])
+        column4.metric("Documents represented", len(dataset_info["documents_represented"]))
+
+        st.write("**By category:**", dataset_info["by_category"])
+        st.write("**Documents:**", ", ".join(dataset_info["documents_represented"]) or "none")
+
+    st.divider()
+    st.subheader("Evaluation report")
+
+    available_reports = evaluation_report.discover_reports()
+    loaded_reports = {
+        path: report
+        for path in available_reports
+        if (report := evaluation_report.load_report_safely(path)) is not None
+    }
+
+    if not available_reports:
         with st.container(border=True):
             st.markdown("#### No evaluation report yet")
             st.write(
-                "This page displays the results of the last evaluation run. "
                 "No report has been generated yet. Run the following from the "
                 "project root, then reload this page:"
             )
@@ -607,31 +633,37 @@ elif page == "Evaluation":
                 "python -m evaluation.report",
                 language="powershell",
             )
+    elif not loaded_reports:
+        st.error(
+            f"Found {len(available_reports)} report file(s) in evaluation/, but none "
+            "could be parsed as valid JSON."
+        )
     else:
-        eval_report = json.loads(report_path.read_text(encoding="utf-8"))
+        default_path = Path("evaluation/rag_report.json")
+        report_paths = list(loaded_reports.keys())
+        default_index = report_paths.index(default_path) if default_path in report_paths else 0
 
-        st.caption(f"Experiment: {eval_report.get('experiment', 'n/a')}")
+        selected_path = st.selectbox(
+            "Select a report",
+            options=report_paths,
+            index=default_index,
+            format_func=lambda path: evaluation_report.report_label(path, loaded_reports[path]),
+        )
 
-        st.subheader("Dataset")
-        dataset_info = eval_report["dataset"]
+        eval_report = loaded_reports[selected_path]
 
-        column1, column2, column3 = st.columns(3)
-        column1.metric("Total questions", dataset_info["total_questions"])
-        column2.metric("Answerable", dataset_info["answerable_questions"])
-        column3.metric("Unanswerable", dataset_info["unanswerable_questions"])
+        st.caption(f"Source: {selected_path.name}")
 
-        st.write("**By category:**", dataset_info["by_category"])
-        st.write("**Documents represented:**", ", ".join(dataset_info["documents_represented"]) or "none")
-
-        st.divider()
         st.subheader("Retrieval metrics")
+
+        retrieval_info = eval_report.get("retrieval", {})
         st.caption(
-            f"Computed over {eval_report['retrieval']['questions_evaluated']} answerable "
+            f"Computed over {retrieval_info.get('questions_evaluated', 'n/a')} answerable "
             "questions with known supporting sources."
         )
 
         retrieval_metrics = {
-            key: value for key, value in eval_report["retrieval"].items()
+            key: value for key, value in retrieval_info.items()
             if key != "questions_evaluated"
         }
         metric_columns = st.columns(len(retrieval_metrics) or 1)
@@ -640,58 +672,131 @@ elif page == "Evaluation":
             column.metric(metric_name, format_score(value))
 
         st.divider()
-        st.subheader("Answer metrics")
+        st.subheader("Answer quality")
+        st.caption(
+            "Correctness and faithfulness require a real generated answer, so they are "
+            "only available for full-generation reports. Citation correctness only needs "
+            "retrieved source metadata, so it remains available even for retrieval-only reports."
+        )
 
         answer_col, faithfulness_col, citation_col = st.columns(3)
 
         with answer_col:
             st.markdown("**Correctness**")
-            st.write(eval_report["answers"]["correctness_counts"])
+            if evaluation_report.has_dict_metric(eval_report, "answers", "correctness_counts"):
+                st.write(eval_report["answers"]["correctness_counts"])
+            else:
+                st.info("Not available (retrieval-only report).")
 
         with faithfulness_col:
             st.markdown("**Faithfulness**")
-            st.write(eval_report["answers"]["faithfulness_counts"])
+            if evaluation_report.has_dict_metric(eval_report, "answers", "faithfulness_counts"):
+                st.write(eval_report["answers"]["faithfulness_counts"])
+            else:
+                st.info("Not available (retrieval-only report).")
 
         with citation_col:
             st.markdown("**Citations**")
-            st.write(eval_report["answers"]["citation_counts"])
+            if evaluation_report.has_dict_metric(eval_report, "answers", "citation_counts"):
+                st.write(eval_report["answers"]["citation_counts"])
+            else:
+                st.info("Not available.")
 
         st.divider()
         st.subheader("Abstention")
-        abstention_info = eval_report["abstention"]
 
-        abstain_col1, abstain_col2, abstain_col3, abstain_col4 = st.columns(4)
-        abstain_col1.metric("Correct abstentions", abstention_info["correct_abstentions"])
-        abstain_col2.metric("Missed abstentions", abstention_info["missed_abstentions"])
-        abstain_col3.metric("Unexpected abstentions", abstention_info["unexpected_abstentions"])
-        abstention_accuracy = abstention_info["abstention_accuracy"]
-        abstain_col4.metric(
-            "Abstention accuracy",
-            f"{abstention_accuracy:.0%}" if abstention_accuracy is not None else "N/A",
-        )
+        if evaluation_report.has_dict_metric(eval_report, "abstention"):
+            abstention_info = eval_report["abstention"]
+
+            abstain_col1, abstain_col2, abstain_col3, abstain_col4, abstain_col5 = st.columns(5)
+            abstain_col1.metric("Correct abstentions", abstention_info["correct_abstentions"])
+            abstain_col2.metric("Expected abstentions", abstention_info["expected_abstentions"])
+            abstain_col3.metric("Missed abstentions", abstention_info["missed_abstentions"])
+            abstain_col4.metric("Unexpected abstentions", abstention_info["unexpected_abstentions"])
+            abstention_accuracy = abstention_info["abstention_accuracy"]
+            abstain_col5.metric(
+                "Abstention accuracy",
+                f"{abstention_accuracy:.0%}" if abstention_accuracy is not None else "N/A",
+            )
+        else:
+            st.info(
+                "Abstention metrics are not available for this report -- it was run in "
+                "retrieval-only mode, so there are no generated answers to check for abstention."
+            )
 
         st.divider()
         st.subheader("Performance")
-        performance_info = eval_report["performance"]
 
-        perf_col1, perf_col2, perf_col3 = st.columns(3)
-        avg_latency = performance_info["average_latency_seconds"]
-        median_latency = performance_info["median_latency_seconds"]
+        performance_info = eval_report.get("performance", {})
+
+        perf_col1, perf_col2, perf_col3, perf_col4 = st.columns(4)
+        avg_latency = performance_info.get("average_latency_seconds")
+        median_latency = performance_info.get("median_latency_seconds")
+        min_latency = performance_info.get("min_latency_seconds")
+        max_latency = performance_info.get("max_latency_seconds")
         perf_col1.metric("Avg latency", f"{avg_latency:.2f}s" if avg_latency is not None else "N/A")
         perf_col2.metric("Median latency", f"{median_latency:.2f}s" if median_latency is not None else "N/A")
-        perf_col3.metric("Model(s)", ", ".join(performance_info["model_names_used"]) or "n/a")
+        perf_col3.metric("Min latency", f"{min_latency:.2f}s" if min_latency is not None else "N/A")
+        perf_col4.metric("Max latency", f"{max_latency:.2f}s" if max_latency is not None else "N/A")
 
-        st.caption(
-            f"Token usage: {performance_info['token_usage']}. "
-            f"{performance_info['unavailable_metrics_reason']}"
-        )
+        st.caption(f"Model(s): {', '.join(performance_info.get('model_names_used', [])) or 'n/a'}")
+        st.caption(evaluation_report.token_usage_message(performance_info))
 
         st.divider()
-        st.subheader(f"Failed questions ({len(eval_report['failures'])})")
 
-        if not eval_report["failures"]:
-            st.success("No failures recorded in the last run.")
+        failures = eval_report.get("failures", [])
+        st.subheader(f"Failed questions ({len(failures)})")
+
+        if not failures:
+            st.success("No failures recorded in this report.")
         else:
-            for failure in eval_report["failures"]:
+            for failure in failures:
                 with st.expander(f"{failure['id']} [{failure['category']}] — {failure['question']}"):
                     st.write("Reasons:", ", ".join(failure["reasons"]))
+
+    st.divider()
+    st.subheader("Experiment comparison — the five required Phase 5 configurations")
+    st.caption(
+        "All five experiments below were run in retrieval-only mode (no answer "
+        "generation), read directly from their existing report files. This compares "
+        "retrieval quality and latency only -- it does not indicate final answer quality."
+    )
+
+    comparison_rows = evaluation_report.build_experiment_comparison_rows()
+
+    comparison_table = [
+        {
+            "Experiment": row["experiment"],
+            "Mode": "retrieval-only" if row["retrieval_only"] else "full generation",
+            "Recall@5": format_score(row["recall_at_5"]) if row["available"] else "not run yet",
+            "Precision@5": format_score(row["precision_at_5"]) if row["available"] else "not run yet",
+            "Hit Rate@5": format_score(row["hit_rate_at_5"]) if row["available"] else "not run yet",
+            "MRR": format_score(row["mrr"]) if row["available"] else "not run yet",
+            "Avg latency": (
+                f"{row['average_latency_seconds']:.2f}s"
+                if row["available"] and row["average_latency_seconds"] is not None
+                else "not run yet"
+            ),
+        }
+        for row in comparison_rows
+    ]
+
+    st.dataframe(comparison_table, use_container_width=True, hide_index=True)
+
+    comparison_summary = evaluation_report.summarize_best_retrieval_configuration(comparison_rows)
+
+    if comparison_summary:
+        st.info(comparison_summary)
+
+    st.divider()
+    st.subheader("Limitations")
+    st.markdown(
+        "- Only total per-question latency is available; internal timing for the "
+        "retrieval step vs. the generation step is not separately exposed.\n"
+        "- Token usage is currently unavailable -- the generator only returns "
+        "response text, not usage metadata.\n"
+        "- The five comparison experiments above were run retrieval-only. They "
+        "measure retrieval quality only and cannot be used to judge final answer "
+        "quality, faithfulness, or abstention behavior -- that requires a separate "
+        "run with answer generation enabled."
+    )

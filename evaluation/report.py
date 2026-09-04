@@ -21,7 +21,7 @@ import statistics
 from pathlib import Path
 
 from evaluation import metrics
-from evaluation.experiments import FINAL_PIPELINE, experiment_names
+from evaluation.experiments import FINAL_PIPELINE, MULTI_QUERY_PLUS_RERANKING, experiment_names
 
 EVALUATION_FILE = Path("evaluation/rag_evaluation.json")
 
@@ -42,6 +42,144 @@ def report_file_for(experiment_name: str, retrieval_only: bool = False) -> Path:
     if experiment_name == FINAL_PIPELINE:
         return Path(f"evaluation/rag_report{suffix}.json")
     return Path(f"evaluation/rag_report_{experiment_name}{suffix}.json")
+
+
+def discover_reports(reports_dir: Path | None = None) -> list[Path]:
+    """All generated evaluation report files, most-recently-modified first.
+
+    Used by the Streamlit Evaluation page's report selector -- reuses the
+    same evaluation/ directory every report is already written to, rather
+    than maintaining a separate hardcoded list of known reports.
+    """
+    directory = reports_dir or EVALUATION_FILE.parent
+    return sorted(
+        directory.glob("rag_report*.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+
+
+def load_report_safely(path: Path) -> dict | None:
+    """Load a report JSON, returning None instead of raising if it's
+    missing or malformed -- callers (the Evaluation UI) must be able to
+    handle an absent/broken report file without crashing the page."""
+    if not path.exists():
+        return None
+
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            return json.load(file)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def report_label(path: Path, report: dict) -> str:
+    experiment = report.get("experiment") or path.stem
+    mode = "retrieval-only" if report.get("retrieval_only") else "full generation"
+    return f"{experiment} ({mode})"
+
+
+def has_dict_metric(report: dict, section: str, key: str | None = None) -> bool:
+    """True if report[section] (or report[section][key], for the nested
+    "answers" section) is a real dict of computed values rather than the
+    ANSWER_QUALITY_NA sentinel string used for retrieval-only reports."""
+    value = report.get(section)
+
+    if key is not None:
+        value = (value or {}).get(key)
+
+    return isinstance(value, dict)
+
+
+def token_usage_message(performance: dict) -> str:
+    """A display string for token usage that never surfaces the stale
+    "Ollama" wording baked into some already-generated report files --
+    performance["unavailable_metrics_reason"] is intentionally never
+    shown to the user."""
+    token_usage = performance.get("token_usage")
+
+    if token_usage is not None:
+        return f"Token usage: {token_usage}"
+
+    return "Token usage unavailable: the current generator does not expose token usage metadata."
+
+
+def build_experiment_comparison_rows() -> list[dict]:
+    """One row per required Phase 5 experiment, sourced from the existing
+    retrieval-only report files via the same report_file_for() naming
+    run_evaluation.py/report.py already use. An experiment whose report
+    hasn't been generated yet gets available=False rather than being
+    omitted or backfilled with fake values.
+    """
+    rows = []
+
+    for name in experiment_names():
+        path = report_file_for(name, retrieval_only=True)
+        report = load_report_safely(path)
+
+        if report is None:
+            rows.append({
+                "experiment": name,
+                "available": False,
+                "retrieval_only": True,
+                "recall_at_5": None,
+                "precision_at_5": None,
+                "hit_rate_at_5": None,
+                "mrr": None,
+                "average_latency_seconds": None,
+            })
+            continue
+
+        retrieval = report.get("retrieval", {})
+        performance = report.get("performance", {})
+
+        rows.append({
+            "experiment": name,
+            "available": True,
+            "retrieval_only": bool(report.get("retrieval_only")),
+            "recall_at_5": retrieval.get("recall_at_5"),
+            "precision_at_5": retrieval.get("precision_at_5"),
+            "hit_rate_at_5": retrieval.get("hit_rate_at_5"),
+            "mrr": retrieval.get("mrr"),
+            "average_latency_seconds": performance.get("average_latency_seconds"),
+        })
+
+    return rows
+
+
+def summarize_best_retrieval_configuration(rows: list[dict]) -> str | None:
+    """A one-sentence, data-derived summary of the actual Phase 5 finding --
+    multi_query_plus_reranking vs. final_pipeline -- computed from whatever
+    the loaded reports say rather than hardcoded numbers. Returns None if
+    either report isn't available yet, so the caller can skip the section
+    instead of showing a broken sentence."""
+    by_name = {row["experiment"]: row for row in rows}
+
+    reranking = by_name.get(MULTI_QUERY_PLUS_RERANKING)
+    final = by_name.get(FINAL_PIPELINE)
+
+    if not reranking or not final or not reranking["available"] or not final["available"]:
+        return None
+
+    reranking_mrr = reranking["mrr"]
+    final_mrr = final["mrr"]
+    reranking_latency = reranking["average_latency_seconds"]
+    final_latency = final["average_latency_seconds"]
+
+    if None in (reranking_mrr, final_mrr, reranking_latency, final_latency) or reranking_latency == 0:
+        return None
+
+    mrr_delta = final_mrr - reranking_mrr
+    latency_increase_pct = (final_latency - reranking_latency) / reranking_latency * 100
+
+    return (
+        "multi_query_plus_reranking is the best practical retrieval configuration: "
+        "final_pipeline adds query rewriting on top of it for only a "
+        f"{mrr_delta:+.3f} MRR change, at a {latency_increase_pct:+.0f}% average-latency cost "
+        f"({reranking_latency:.2f}s → {final_latency:.2f}s). This is a retrieval-quality "
+        "comparison only -- both experiments were run retrieval-only, so neither result "
+        "says anything about final answer quality."
+    )
 
 
 def load_dataset() -> dict:
