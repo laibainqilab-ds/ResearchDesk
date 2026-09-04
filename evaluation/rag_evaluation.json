@@ -1,155 +1,1277 @@
 [
   {
-    "id": "q1",
-    "question": "What is Evo 2?",
-    "expected_answer": "Evo 2 is a genomic foundation model that learns DNA sequences through next-nucleotide prediction and can be used for both predicting variant effects and generating new DNA sequences.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 1
-    }
+    "id": "q001",
+    "question": "What is the full title of the paper the talk is based on?",
+    "category": "direct",
+    "expected_answer": "The paper is titled \"Genome modelling and design across all domains of life with Evo 2.\"",
+    "key_facts": [
+      "Genome modelling and design across all domains of life"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q2",
-    "question": "What are the four DNA bases?",
-    "expected_answer": "The four DNA bases are Adenine (A), Thymine (T), Guanine (G), and Cytosine (C).",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 2
-    }
+    "id": "q002",
+    "question": "In which journal and year was the Evo 2 paper published?",
+    "category": "direct",
+    "expected_answer": "It was published in the journal Nature in 2026.",
+    "key_facts": [
+      "Nature",
+      "2026"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q3",
-    "question": "How many parameters do the two Evo 2 model versions have?",
-    "expected_answer": "Evo 2 has versions with 7 billion and 40 billion parameters.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 3
-    }
+    "id": "q003",
+    "question": "What are the four DNA bases described in the talk, and what do they stand for?",
+    "category": "direct",
+    "expected_answer": "A, T, G, and C, standing for Adenine, Thymine, Guanine, and Cytosine.",
+    "key_facts": [
+      "Adenine",
+      "Thymine",
+      "Guanine",
+      "Cytosine"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 2,
+        "chunk_id": 2
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q4",
-    "question": "How much DNA data was used to train Evo 2?",
-    "expected_answer": "The OpenGenome2 training dataset contains 9.3 trillion DNA letters.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 3
-    }
+    "id": "q004",
+    "question": "About how many times has the cost of reading out DNA dropped since 2007?",
+    "category": "direct",
+    "expected_answer": "About ten thousand times since 2007.",
+    "key_facts": [
+      "ten thousand",
+      "2007"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 2,
+        "chunk_id": 2
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q5",
-    "question": "Why can't standard transformers efficiently process one million DNA tokens?",
-    "expected_answer": "Standard attention has quadratic computational growth with sequence length, making it extremely expensive for sequences containing around one million tokens.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 4
-    }
+    "id": "q005",
+    "question": "What is OpenGenome2, and how many DNA letters does it contain?",
+    "category": "direct",
+    "expected_answer": "OpenGenome2 is Evo 2's training dataset, containing 9.3 trillion DNA letters.",
+    "key_facts": [
+      "OpenGenome2",
+      "9.3 trillion"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q6",
-    "question": "What are SE, MR, and LI in Evo 2?",
-    "expected_answer": "SE stands for Short Explicit Hyena, MR stands for Medium Regularized Hyena, and LI stands for Long Implicit Hyena. They handle short-, medium-, and long-range patterns respectively.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 4
-    }
+    "id": "q006",
+    "question": "What are the two parameter sizes Evo 2 was built in?",
+    "category": "direct",
+    "expected_answer": "Evo 2 was built in a 7 billion parameter version and a 40 billion parameter version.",
+    "key_facts": [
+      "7 billion",
+      "40 billion"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q7",
-    "question": "How does Evo 2 learn from DNA?",
-    "expected_answer": "Evo 2 uses self-supervised next-nucleotide prediction. It predicts the next DNA letter and compares its prediction with the actual next letter using cross-entropy loss.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 3
-    }
+    "id": "q007",
+    "question": "What is the maximum context window, in tokens, that both versions of Evo 2 can process?",
+    "category": "direct",
+    "expected_answer": "Both versions can process up to 1 million tokens at once.",
+    "key_facts": [
+      "1 million"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q8",
-    "question": "What are the two major capabilities of Evo 2?",
-    "expected_answer": "Evo 2 can predict the effects of genetic variants and generate new DNA sequences.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 6
-    }
+    "id": "q008",
+    "question": "Before its official Nature publication, how and when was Evo 2 first shared with the research community?",
+    "category": "direct",
+    "expected_answer": "It was first released as a preprint in February 2025.",
+    "key_facts": [
+      "preprint",
+      "February 2025"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q9",
-    "question": "What AUROC score did Evo 2 achieve for BRCA1 mutation classification without additional training?",
-    "expected_answer": "Evo 2 achieved an AUROC of 0.95 for BRCA1 mutation classification without additional training.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 7
-    }
-  },
-  {
-    "id": "q10",
-    "question": "What are some limitations of Evo 2?",
-    "expected_answer": "Its predictions are not medical decisions, it can potentially be misused for biological design, training requires substantial computing resources, and its performance varies across genes and mutation types.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 8
-    }
-  },
-  {
-    "id": "q11",
-    "question": "What is Evo 2 used for in personalized medicine?",
-    "expected_answer": "It could potentially help predict whether a person's genetic variants are likely to be harmful.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 9
-    }
-  },
-  {
-    "id": "q12",
-    "question": "What architecture does Evo 2 use?",
-    "expected_answer": "Evo 2 uses the StripedHyena 2 architecture, which combines Hyena operators with occasional regular attention.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 4
-    }
-  },
-  {
-    "id": "q13",
-    "question": "How does Evo 2 compare with GPT in terms of what it learns?",
-    "expected_answer": "Evo 2 applies next-token prediction to DNA sequences, while GPT applies next-token prediction to human language. Evo 2 learns patterns in DNA rather than patterns in human-written text.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 1
-    }
-  },
-  {
-    "id": "q14",
-    "question": "What species was used in the generalization test mentioned in the presentation?",
-    "expected_answer": "Evo 2 was able to label parts of the woolly mammoth genome despite having no training data specifically about mammoths.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 7
-    }
-  },
-  {
-    "id": "q15",
+    "id": "q009",
     "question": "How many GPUs were used to train the 40-billion-parameter Evo 2 model?",
-    "expected_answer": "The 40-billion-parameter model was trained using 1,024 GPUs.",
-    "expected_source": {
-      "filename": "SCRIPT FOR DISCOVERY.pdf",
-      "page_number": 4
-    }
+    "category": "direct",
+    "expected_answer": "1,024 GPUs were used to train the 40-billion-parameter model.",
+    "key_facts": [
+      "1,024",
+      "GPUs"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10
+      }
+    ],
+    "depends_on": null
   },
   {
-    "id": "q16",
+    "id": "q010",
+    "question": "What AUROC score did Evo 2 achieve on BRCA1 mutation classification without any additional training?",
+    "category": "direct",
+    "expected_answer": "Evo 2 achieved an AUROC of 0.95 with no extra training.",
+    "key_facts": [
+      "0.95",
+      "AUROC",
+      "BRCA1"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q011",
+    "question": "What AUROC score was reached after training a small classifier on about 830,000 known DNA changes?",
+    "category": "direct",
+    "expected_answer": "The score was pushed up to 0.997.",
+    "key_facts": [
+      "0.997",
+      "830,000"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q012",
+    "question": "What extinct species' genome did Evo 2 correctly label parts of, despite having no training data specifically about it?",
+    "category": "direct",
+    "expected_answer": "The woolly mammoth.",
+    "key_facts": [
+      "woolly mammoth"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q013",
+    "question": "According to the talk, what precaution did the Evo 2 researchers take to reduce the risk of misuse for dangerous biological design?",
+    "category": "direct",
+    "expected_answer": "They excluded viruses that infect plants, animals, and humans from the training data.",
+    "key_facts": [
+      "excluded viruses",
+      "training data"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 9,
+        "chunk_id": 14
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q014",
+    "question": "What is the title of the Final Year Design Project proposed in the second document?",
+    "category": "direct",
+    "expected_answer": "Automated lead generation & voice-based client interaction system for project acquisition.",
+    "key_facts": [
+      "lead generation",
+      "voice-based client interaction"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q015",
+    "question": "Which company's lead generation and outreach capabilities inspired the proposed FYDP system?",
+    "category": "direct",
+    "expected_answer": "Apollo.io.",
+    "key_facts": [
+      "Apollo.io"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 2,
+        "chunk_id": 1
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q016",
+    "question": "Who is the supervisor listed for the FYDP project, and what is their designation?",
+    "category": "direct",
+    "expected_answer": "Muhammad Hammad, Lecturer, Department of CSIT.",
+    "key_facts": [
+      "Muhammad Hammad",
+      "Lecturer"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 5,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q017",
+    "question": "What are SE, MR, and LI in Evo 2's architecture, and what does each one handle?",
+    "category": "multi_chunk",
+    "expected_answer": "SE (Short Explicit Hyena) handles short-range patterns like codons; MR (Medium Regularized Hyena) handles patterns that are farther apart; LI (Long Implicit Hyena) handles very long-distance patterns by creating its filter dynamically instead of storing one fixed filter.",
+    "key_facts": [
+      "Short Explicit Hyena",
+      "Medium Regularized Hyena",
+      "Long Implicit Hyena"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 8
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 9
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q018",
+    "question": "Why can't standard/regular attention efficiently handle Evo 2's goal of a one-million-letter context window?",
+    "category": "multi_chunk",
+    "expected_answer": "Standard attention compares every position to every other position, so its cost grows quadratically with sequence length. That's manageable up to roughly a hundred thousand tokens, but becomes far too expensive at the million-token scale Evo 2 targets.",
+    "key_facts": [
+      "quadratic",
+      "attention",
+      "million"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 7
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 8
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q019",
+    "question": "What training method does Evo 2 use, and what biological patterns did researchers later find it had learned as a side effect?",
+    "category": "multi_chunk",
+    "expected_answer": "Evo 2 is trained with self-supervised next-nucleotide prediction using cross-entropy loss, with no human labels. As a side effect of this training, researchers found it had learned to represent gene boundaries, protein-binding sites, and pieces of protein structure, without ever being told what these were.",
+    "key_facts": [
+      "next-nucleotide prediction",
+      "cross-entropy",
+      "gene boundaries"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q020",
+    "question": "What are Evo 2's two major capabilities, and how does the DNA-generation capability actually work?",
+    "category": "multi_chunk",
+    "expected_answer": "Evo 2 can predict variant effects and generate new DNA sequences. Generation works autoregressively: the model picks one DNA letter at a time based on what it thinks is likely to come next, feeds that letter back in as context, and repeats, optionally using guided search to steer sequences toward a specific goal.",
+    "key_facts": [
+      "predict variant effects",
+      "generate",
+      "guided search"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 5
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 7,
+        "chunk_id": 11
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q021",
+    "question": "How does Evo 2's two-stage training process relate to the problem of processing a million DNA letters efficiently?",
+    "category": "multi_chunk",
+    "expected_answer": "Because standard attention is too computationally expensive to train directly at a million-letter scale, Evo 2 first pretrains on shorter, information-rich sequences to learn basic patterns cheaply, then uses a midtraining stage that gradually increases sequence length until it reaches the full 1-million-letter target.",
+    "key_facts": [
+      "pretraining",
+      "midtraining",
+      "gradually increased"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 8
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q022",
+    "question": "The talk notes that Evo 2's performance varies by gene or mutation type in more than one place. Where does this point come up?",
+    "category": "multi_chunk",
+    "expected_answer": "It comes up in the Experimental Results section, where independent testers found performance varies by gene/mutation type, and again in the Limitations section, which repeats that Evo 2 doesn't perform equally well on every gene or mutation type.",
+    "key_facts": [
+      "performance varies",
+      "gene or mutation type"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 9,
+        "chunk_id": 14
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q023",
+    "question": "What problem does 'representation learning' solve, and how does Evo 2's actual training approach implement that idea?",
+    "category": "multi_chunk",
+    "expected_answer": "Representation learning avoids hand-building features for every new biological question by training one model on raw data with a general self-supervised goal and reusing what it learned. Evo 2 implements this concretely through self-supervised next-nucleotide prediction on raw DNA sequences.",
+    "key_facts": [
+      "representation learning",
+      "self-supervised",
+      "next-nucleotide"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 2,
+        "chunk_id": 3
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q024",
+    "question": "Which institutions are credited with creating Evo 2, combining what's mentioned in the introduction and in the 'Introducing Evo 2' section?",
+    "category": "multi_chunk",
+    "expected_answer": "Arc Institute, NVIDIA, Stanford, UCSF, Berkeley, Goodfire, and the University of Washington.",
+    "key_facts": [
+      "Arc Institute",
+      "NVIDIA",
+      "Stanford",
+      "Goodfire",
+      "University of Washington"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q025",
+    "question": "What does the FYDP proposal say about the technologies used for the voice-based client interaction feature?",
+    "category": "multi_chunk",
+    "expected_answer": "The methodology describes a voice agent built from speech-to-text, an LLM to process responses, and text-to-speech; the Resources section adds that Twilio is planned for voice/calling integration alongside the STT/TTS and LLM APIs.",
+    "key_facts": [
+      "speech-to-text",
+      "text-to-speech",
+      "Twilio"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 2,
+        "chunk_id": 1
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 3,
+        "chunk_id": 2
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q026",
+    "question": "What does the FYDP proposal say about the system's role relative to human staff?",
+    "category": "multi_chunk",
+    "expected_answer": "The objectives describe automating lead collection, scoring, and outreach to enable efficient human follow-up, and the Scope section makes explicit that the system will assist human representatives rather than independently finalize or acquire projects.",
+    "key_facts": [
+      "assist human representatives",
+      "not independently finalize"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 2,
+        "chunk_id": 1
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q027",
+    "question": "How many documents are currently indexed in ResearchDesk, and what is each one about?",
+    "category": "multi_document",
+    "expected_answer": "Two documents: SCRIPT FOR DISCOVERY.pdf, a talk about the Evo 2 genomic foundation model, and the FYDP proposal form, a university final-year project proposal for an automated lead-generation and voice-based client-interaction system.",
+    "key_facts": [
+      "Evo 2",
+      "lead generation",
+      "two documents"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q028",
+    "question": "Both documents describe a system built around a model trained on sequential data. Name each system and what kind of sequence each one processes.",
+    "category": "multi_document",
+    "expected_answer": "Evo 2 processes DNA sequences (individual nucleotide letters). The FYDP project's planned voice agent processes spoken/text language through an LLM as part of its conversational pipeline.",
+    "key_facts": [
+      "DNA sequences",
+      "LLM",
+      "voice agent"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 2,
+        "chunk_id": 2
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 2,
+        "chunk_id": 1
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q029",
+    "question": "Which of the two documents discusses large-scale GPU training, and which one discusses a Gantt chart and project team? Give the specific numbers/names involved.",
+    "category": "multi_document",
+    "expected_answer": "SCRIPT FOR DISCOVERY.pdf discusses training the 40-billion-parameter Evo 2 model on 1,024 GPUs. The FYDP proposal contains a Gantt chart running from August 2026 to June 2027 and lists the team members Muhammad Ali, Laiba Patel, Azeema Alishah, and Daniyal Khan.",
+    "key_facts": [
+      "1,024 GPUs",
+      "Gantt chart",
+      "Muhammad Ali"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 4,
+        "chunk_id": 3
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 5,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q030",
+    "question": "Do either of the two documents mention large language models being used as part of a system, and if so, how is the LLM used in each case?",
+    "category": "multi_document",
+    "expected_answer": "Evo 2 is itself described as analogous to a language model, but applied to DNA letters instead of words. Separately, the FYDP proposal explicitly plans to use an LLM API to process customer responses and generate replies within its voice-based conversational agent.",
+    "key_facts": [
+      "language model",
+      "LLM API",
+      "conversational agent"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 2,
+        "chunk_id": 2
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 2,
+        "chunk_id": 1
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 3,
+        "chunk_id": 2
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q031",
+    "question": "Compare the subject domains of the two documents currently in the ResearchDesk corpus.",
+    "category": "multi_document",
+    "expected_answer": "One document is about a genomic AI foundation model (Evo 2) for DNA analysis and design; the other is a university software engineering project proposal for an AI-assisted, voice-based lead-generation and client-acquisition system. The two documents are on unrelated topics: biology/genomics versus business-process software engineering.",
+    "key_facts": [
+      "genomic",
+      "software engineering",
+      "unrelated"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q032",
+    "question": "Given that Evo 2's 40-billion-parameter model needed 1,024 GPUs and trillions of DNA letters to train, what does the talk say this implies for smaller labs?",
+    "category": "multi_hop",
+    "expected_answer": "The Limitations section states that this level of compute is unrealistic for most universities or research labs to replicate from scratch.",
+    "key_facts": [
+      "unrealistic",
+      "universities",
+      "research labs"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 9,
+        "chunk_id": 14
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q033",
+    "question": "Explain how Evo 2's unlabeled next-letter-prediction training led it to learn where genes start and end, without ever being told what a gene is.",
+    "category": "multi_hop",
+    "expected_answer": "To get good at predicting the next DNA letter, the model was forced to pick up real underlying structure along the way. Researchers later found it had learned to represent gene/coding-region boundaries internally, purely as a side effect of this next-letter prediction objective.",
+    "key_facts": [
+      "side effect",
+      "gene boundaries",
+      "next letter"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 4,
+        "chunk_id": 6
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q034",
+    "question": "The talk argues regular attention doesn't scale to a million-letter context, yet Evo 2 still uses some attention. How does the model resolve this?",
+    "category": "multi_hop",
+    "expected_answer": "Evo 2 uses Hyena operators (SE, MR, LI) for most of the sequence-processing work because they are much cheaper computationally, and reserves regular attention for only a small, occasional portion of the model where its precision is most useful, instead of using attention throughout like a standard transformer.",
+    "key_facts": [
+      "Hyena operators",
+      "occasionally",
+      "cheaper"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 8
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 9
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q035",
+    "question": "Based on the two-stage training process, explain why Evo 2 was not trained on million-letter sequences from the very first training step.",
+    "category": "multi_hop",
+    "expected_answer": "Because processing very long sequences is computationally expensive under standard approaches, Evo 2 first pretrains on shorter, information-dense sequences to learn basic patterns cheaply, and only in the midtraining stage gradually increases sequence length up to 1 million letters.",
+    "key_facts": [
+      "pretraining",
+      "gradually",
+      "computationally expensive"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 5,
+        "chunk_id": 8
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q036",
+    "question": "Evo 2 scored 0.95 AUROC zero-shot on BRCA1 and a follow-up study reached 0.997 using about 830,000 labeled examples. What does this progression suggest?",
+    "category": "multi_hop",
+    "expected_answer": "It suggests that while Evo 2's zero-shot performance was already strong, adding more labeled training examples for a downstream classifier built on top of Evo 2 pushed performance meaningfully higher.",
+    "key_facts": [
+      "zero-shot",
+      "more labeled examples",
+      "higher"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q037",
+    "question": "The document mentions Evo 1 and DNABERT as earlier models. Based on the talk, what problem did Evo 2 specifically aim to solve that they didn't?",
+    "category": "multi_hop",
+    "expected_answer": "Evo 1 and DNABERT were limited to shorter sequences or a single type of organism, such as bacteria only. Evo 2 aimed to handle a much larger context window (up to 1 million tokens) and was trained across all major domains of life, including bacteria, archaea, and eukaryotes.",
+    "key_facts": [
+      "limited",
+      "bacteria only",
+      "domains of life"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q038",
+    "question": "The FYDP proposal says the system should assist humans rather than independently finalize projects, but also describes AI scoring with only 'optional' manual verification. What does this imply about the AI scoring step's autonomy?",
+    "category": "multi_hop",
+    "expected_answer": "The AI-based lead scoring step can run without a human reviewing every lead, since manual verification is optional. However, the system as a whole is still scoped to stop short of independently closing or acquiring projects, meaning human follow-up remains the final decision point even though earlier stages can run with reduced human oversight.",
+    "key_facts": [
+      "optional",
+      "human follow-up",
+      "not independently"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      },
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 2,
+        "chunk_id": 1
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q039",
+    "question": "Based on the Gantt chart's task ordering, which capability is scheduled after lead scoring but before the dashboard, and what does that imply about development priority?",
+    "category": "multi_hop",
+    "expected_answer": "Email outreach and tracking, followed by the voice agent and speech processing module, are scheduled after AI lead scoring and before the Dashboard/CRM task, implying outreach and voice interaction are prioritized as core functionality ahead of the unifying dashboard.",
+    "key_facts": [
+      "outreach",
+      "voice agent",
+      "before",
+      "dashboard"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 4,
+        "chunk_id": 3
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q040",
+    "question": "What does 'context' mean in this talk?",
+    "category": "ambiguous",
+    "expected_answer": "It refers to Evo 2's context window: the amount of DNA sequence (up to 1 million tokens) the model can process and 'see' at once, not a general narrative context.",
+    "key_facts": [
+      "context window",
+      "1 million"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q041",
+    "question": "What does 'the model' refer to when the talk says it 'looked inside its internal workings' and found gene boundaries?",
+    "category": "ambiguous",
+    "expected_answer": "It refers to Evo 2 specifically, in the Experimental Results section, not DNABERT or Evo 1.",
+    "key_facts": [
+      "Evo 2",
+      "internal workings",
+      "gene boundaries"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q042",
+    "question": "Is Evo 2 a foundation model?",
+    "category": "ambiguous",
+    "expected_answer": "Yes. The talk explicitly frames Evo 2 as a genomic foundation model: trained once and reused for multiple tasks (variant prediction and DNA generation) without retraining from scratch.",
+    "key_facts": [
+      "foundation model",
+      "trained once",
+      "without retraining"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q043",
+    "question": "What does 'the system' assist with in the FYDP proposal?",
+    "category": "ambiguous",
+    "expected_answer": "The FYDP system as a whole assists human representatives with lead collection, AI-based scoring, outreach, and requirement extraction, but explicitly does not independently finalize or acquire projects.",
+    "key_facts": [
+      "assist",
+      "lead collection",
+      "not independently finalize"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 2,
+        "chunk_id": 1
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q044",
+    "question": "Who are 'the researchers' being referred to across the talk?",
+    "category": "ambiguous",
+    "expected_answer": "The talk uses 'researchers' in more than one sense: the original Evo 2 team (Arc Institute and collaborators) who built and published the model, and separately, independent/follow-up researchers who later tested Evo 2 or trained classifiers on top of it.",
+    "key_facts": [
+      "original",
+      "independent",
+      "follow-up"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      },
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q045a",
+    "question": "What two parameter sizes was Evo 2 built in?",
+    "category": "direct",
+    "expected_answer": "7 billion and 40 billion parameters.",
+    "key_facts": [
+      "7 billion",
+      "40 billion"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 3,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q045b",
+    "question": "How many GPUs were used to train the larger one?",
+    "category": "follow_up",
+    "expected_answer": "1,024 GPUs were used to train the 40-billion-parameter model.",
+    "key_facts": [
+      "1,024",
+      "GPUs"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 6,
+        "chunk_id": 10
+      }
+    ],
+    "depends_on": "q045a"
+  },
+  {
+    "id": "q046a",
+    "question": "What score did Evo 2 achieve on BRCA1 mutation classification with no extra training?",
+    "category": "direct",
+    "expected_answer": "An AUROC of 0.95.",
+    "key_facts": [
+      "0.95",
+      "AUROC"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q046b",
+    "question": "What did that score become after the follow-up study with more labeled data?",
+    "category": "follow_up",
+    "expected_answer": "It rose to 0.997.",
+    "key_facts": [
+      "0.997"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "doc_001",
+        "filename": "SCRIPT FOR DISCOVERY.pdf",
+        "page_number": 8,
+        "chunk_id": 13
+      }
+    ],
+    "depends_on": "q046a"
+  },
+  {
+    "id": "q047a",
+    "question": "What is the title of the FYDP project described in the second document?",
+    "category": "direct",
+    "expected_answer": "Automated lead generation & voice-based client interaction system for project acquisition.",
+    "key_facts": [
+      "lead generation",
+      "voice-based"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 1,
+        "chunk_id": 0
+      }
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "q047b",
+    "question": "Who supervises it?",
+    "category": "follow_up",
+    "expected_answer": "Muhammad Hammad, Lecturer, Department of CSIT.",
+    "key_facts": [
+      "Muhammad Hammad"
+    ],
+    "should_abstain": false,
+    "supporting_sources": [
+      {
+        "document_id": "f79b5fe22e9c9fdbb395a9ab3ffa92aa74b4c59debb65e009e088840d4d6f2d5",
+        "filename": "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+        "page_number": 5,
+        "chunk_id": 4
+      }
+    ],
+    "depends_on": "q047a"
+  },
+  {
+    "id": "q048",
     "question": "What is the capital of France?",
+    "category": "unanswerable",
     "expected_answer": null,
-    "should_abstain": true
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
   },
   {
-    "id": "q17",
+    "id": "q049",
     "question": "Who is the current CEO of NVIDIA?",
+    "category": "unanswerable",
     "expected_answer": null,
-    "should_abstain": true
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
   },
   {
-    "id": "q18",
+    "id": "q050",
     "question": "What is the exact accuracy of Evo 2 on every possible human genetic mutation?",
+    "category": "unanswerable",
     "expected_answer": null,
-    "should_abstain": true
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
+  },
+  {
+    "id": "q051",
+    "question": "Is the FYDP project's frontend written in TypeScript or plain JavaScript?",
+    "category": "unanswerable",
+    "expected_answer": null,
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
+  },
+  {
+    "id": "q052",
+    "question": "What is the total budget allocated for the FYDP project?",
+    "category": "unanswerable",
+    "expected_answer": null,
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
+  },
+  {
+    "id": "q053",
+    "question": "How does Evo 2's benchmark accuracy compare to AlphaFold?",
+    "category": "unanswerable",
+    "expected_answer": null,
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
+  },
+  {
+    "id": "q054",
+    "question": "What grade or evaluation score did the FYDP proposal receive from the steering committee?",
+    "category": "unanswerable",
+    "expected_answer": null,
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
+  },
+  {
+    "id": "q055",
+    "question": "Which cloud provider (AWS, Azure, or GCP) does the FYDP project plan to deploy on?",
+    "category": "unanswerable",
+    "expected_answer": null,
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
+  },
+  {
+    "id": "q056",
+    "question": "What is Evo 2's measured performance on RNA structure prediction?",
+    "category": "unanswerable",
+    "expected_answer": null,
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
+  },
+  {
+    "id": "q057",
+    "question": "Does either document in the corpus mention quantum computing?",
+    "category": "unanswerable",
+    "expected_answer": null,
+    "key_facts": [],
+    "should_abstain": true,
+    "supporting_sources": [],
+    "depends_on": null
   }
 ]

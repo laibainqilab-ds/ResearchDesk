@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import streamlit as st
@@ -589,12 +590,108 @@ elif page == "Retrieval Inspector":
 
 elif page == "Evaluation":
     st.header("Evaluation")
-    st.caption("Automated quality measurement for retrieval and answers.")
+    st.caption("Results from the most recently generated Phase 5 evaluation report.")
 
-    with st.container(border=True):
-        st.markdown("#### Coming in a future phase")
-        st.write(
-            "Evaluation is not implemented yet. A future phase will add "
-            "automated measurement of retrieval and answer quality. No "
-            "evaluation metrics are available in this version."
+    report_path = Path("evaluation/rag_report.json")
+
+    if not report_path.exists():
+        with st.container(border=True):
+            st.markdown("#### No evaluation report yet")
+            st.write(
+                "This page displays the results of the last evaluation run. "
+                "No report has been generated yet. Run the following from the "
+                "project root, then reload this page:"
+            )
+            st.code(
+                "python -m evaluation.run_evaluation\n"
+                "python -m evaluation.report",
+                language="powershell",
+            )
+    else:
+        eval_report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        st.caption(f"Experiment: {eval_report.get('experiment', 'n/a')}")
+
+        st.subheader("Dataset")
+        dataset_info = eval_report["dataset"]
+
+        column1, column2, column3 = st.columns(3)
+        column1.metric("Total questions", dataset_info["total_questions"])
+        column2.metric("Answerable", dataset_info["answerable_questions"])
+        column3.metric("Unanswerable", dataset_info["unanswerable_questions"])
+
+        st.write("**By category:**", dataset_info["by_category"])
+        st.write("**Documents represented:**", ", ".join(dataset_info["documents_represented"]) or "none")
+
+        st.divider()
+        st.subheader("Retrieval metrics")
+        st.caption(
+            f"Computed over {eval_report['retrieval']['questions_evaluated']} answerable "
+            "questions with known supporting sources."
         )
+
+        retrieval_metrics = {
+            key: value for key, value in eval_report["retrieval"].items()
+            if key != "questions_evaluated"
+        }
+        metric_columns = st.columns(len(retrieval_metrics) or 1)
+
+        for column, (metric_name, value) in zip(metric_columns, retrieval_metrics.items()):
+            column.metric(metric_name, format_score(value))
+
+        st.divider()
+        st.subheader("Answer metrics")
+
+        answer_col, faithfulness_col, citation_col = st.columns(3)
+
+        with answer_col:
+            st.markdown("**Correctness**")
+            st.write(eval_report["answers"]["correctness_counts"])
+
+        with faithfulness_col:
+            st.markdown("**Faithfulness**")
+            st.write(eval_report["answers"]["faithfulness_counts"])
+
+        with citation_col:
+            st.markdown("**Citations**")
+            st.write(eval_report["answers"]["citation_counts"])
+
+        st.divider()
+        st.subheader("Abstention")
+        abstention_info = eval_report["abstention"]
+
+        abstain_col1, abstain_col2, abstain_col3, abstain_col4 = st.columns(4)
+        abstain_col1.metric("Correct abstentions", abstention_info["correct_abstentions"])
+        abstain_col2.metric("Missed abstentions", abstention_info["missed_abstentions"])
+        abstain_col3.metric("Unexpected abstentions", abstention_info["unexpected_abstentions"])
+        abstention_accuracy = abstention_info["abstention_accuracy"]
+        abstain_col4.metric(
+            "Abstention accuracy",
+            f"{abstention_accuracy:.0%}" if abstention_accuracy is not None else "N/A",
+        )
+
+        st.divider()
+        st.subheader("Performance")
+        performance_info = eval_report["performance"]
+
+        perf_col1, perf_col2, perf_col3 = st.columns(3)
+        avg_latency = performance_info["average_latency_seconds"]
+        median_latency = performance_info["median_latency_seconds"]
+        perf_col1.metric("Avg latency", f"{avg_latency:.2f}s" if avg_latency is not None else "N/A")
+        perf_col2.metric("Median latency", f"{median_latency:.2f}s" if median_latency is not None else "N/A")
+        perf_col3.metric("Model(s)", ", ".join(performance_info["model_names_used"]) or "n/a")
+
+        st.caption(
+            f"Token usage: {performance_info['token_usage']}. "
+            f"{performance_info['unavailable_metrics_reason']}"
+        )
+
+        st.divider()
+        st.subheader(f"Failed questions ({len(eval_report['failures'])})")
+
+        if not eval_report["failures"]:
+            st.success("No failures recorded in the last run.")
+        else:
+            for failure in eval_report["failures"]:
+                with st.expander(f"{failure['id']} [{failure['category']}] — {failure['question']}"):
+                    st.write("Reasons:", ", ".join(failure["reasons"]))

@@ -21,6 +21,7 @@ class RAG:
         search_queries: list[str],
         top_k: int = 3,
         document_id: str | None = None,
+        enable_reranking: bool = True,
     ) -> dict:
         where = None
 
@@ -63,10 +64,18 @@ class RAG:
         for result in all_results:
             metadata = result["metadata"]
 
-            chunk_key = (
-                metadata["document_id"],
-                metadata["chunk_id"],
-            )
+            candidate_document_id = metadata.get("document_id")
+            candidate_chunk_id = metadata.get("chunk_id")
+
+            if candidate_document_id is None or candidate_chunk_id is None:
+                logger.warning(
+                    "Skipping retrieved chunk with malformed metadata "
+                    "(missing document_id and/or chunk_id): %r",
+                    metadata,
+                )
+                continue
+
+            chunk_key = (candidate_document_id, candidate_chunk_id)
 
             if (
                 chunk_key not in unique_results
@@ -83,31 +92,40 @@ class RAG:
                 "final_evidence": [],
             }
 
-        candidate_documents = [
-            candidate["document"]
-            for candidate in candidates
-        ]
-
-        reranked_documents = self.reranker.rerank(
-            query=retrieval_question,
-            documents=candidate_documents,
-        )
-
-        reranked_lookup = {
-            document: score
-            for document, score in reranked_documents
-        }
-
-        for candidate in candidates:
-            candidate["rerank_score"] = reranked_lookup[
+        if enable_reranking:
+            candidate_documents = [
                 candidate["document"]
+                for candidate in candidates
             ]
 
-        ranked_candidates = sorted(
-            candidates,
-            key=lambda result: result["rerank_score"],
-            reverse=True,
-        )
+            reranked_documents = self.reranker.rerank(
+                query=retrieval_question,
+                documents=candidate_documents,
+            )
+
+            reranked_lookup = {
+                document: score
+                for document, score in reranked_documents
+            }
+
+            for candidate in candidates:
+                candidate["rerank_score"] = reranked_lookup[
+                    candidate["document"]
+                ]
+
+            ranked_candidates = sorted(
+                candidates,
+                key=lambda result: result["rerank_score"],
+                reverse=True,
+            )
+        else:
+            for candidate in candidates:
+                candidate["rerank_score"] = None
+
+            ranked_candidates = sorted(
+                candidates,
+                key=lambda result: result["distance"],
+            )
 
         selected_results = ranked_candidates[:top_k]
 
@@ -118,10 +136,10 @@ class RAG:
 
             inspector_candidates.append(
                 {
-                    "document_id": metadata["document_id"],
-                    "filename": metadata["filename"],
+                    "document_id": metadata.get("document_id"),
+                    "filename": metadata.get("filename"),
                     "page_number": metadata.get("page_number"),
-                    "chunk_id": metadata["chunk_id"],
+                    "chunk_id": metadata.get("chunk_id"),
                     "search_query": result["search_query"],
                     "retrieval_distance": result["distance"],
                     "rerank_score": result["rerank_score"],
@@ -131,10 +149,10 @@ class RAG:
 
         final_evidence = [
             {
-                "document_id": result["metadata"]["document_id"],
-                "filename": result["metadata"]["filename"],
+                "document_id": result["metadata"].get("document_id"),
+                "filename": result["metadata"].get("filename"),
                 "page_number": result["metadata"].get("page_number"),
-                "chunk_id": result["metadata"]["chunk_id"],
+                "chunk_id": result["metadata"].get("chunk_id"),
                 "rerank_score": result["rerank_score"],
                 "document": result["document"],
             }
@@ -152,12 +170,16 @@ class RAG:
         top_k: int = 3,
         conversation_history: list[dict] | None = None,
         document_id: str | None = None,
+        enable_query_rewrite: bool = True,
+        enable_multi_query: bool = True,
+        enable_reranking: bool = True,
+        enable_answer_generation: bool = True,
     ) -> dict:
         conversation_history = conversation_history or []
 
         recent_history = conversation_history[-3:]
 
-        if recent_history:
+        if enable_query_rewrite and recent_history:
             try:
                 retrieval_question = self.generator.rewrite_query(
                     question=question,
@@ -169,13 +191,16 @@ class RAG:
         else:
             retrieval_question = question
 
-        try:
-            search_queries = self.generator.generate_queries(
-                question=retrieval_question,
-                num_queries=3,
-            )
-        except GenerationUnavailableError as error:
-            logger.warning("Multi-query generation unavailable, using single query: %s", error)
+        if enable_multi_query:
+            try:
+                search_queries = self.generator.generate_queries(
+                    question=retrieval_question,
+                    num_queries=3,
+                )
+            except GenerationUnavailableError as error:
+                logger.warning("Multi-query generation unavailable, using single query: %s", error)
+                search_queries = [retrieval_question]
+        else:
             search_queries = [retrieval_question]
 
         retrieval = self.retrieve(
@@ -183,6 +208,7 @@ class RAG:
             search_queries=search_queries,
             top_k=top_k,
             document_id=document_id,
+            enable_reranking=enable_reranking,
         )
 
         selected_results = retrieval["final_evidence"]
@@ -232,6 +258,20 @@ class RAG:
                     "rerank_score": result["rerank_score"],
                 }
             )
+
+        if not enable_answer_generation:
+            return {
+                "answer": None,
+                "sources": sources,
+                "retrieval": {
+                    "original_question": question,
+                    "rewritten_question": retrieval_question,
+                    "search_queries": search_queries,
+                    "candidates": retrieval["candidates"],
+                    "final_evidence": retrieval["final_evidence"],
+                },
+                "error": None,
+            }
 
         context = "\n\n".join(context_parts)
 

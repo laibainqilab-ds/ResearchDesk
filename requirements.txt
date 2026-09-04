@@ -5,3 +5,4 @@ streamlit
 pymupdf
 scikit-learn
 pytest
+google-genai

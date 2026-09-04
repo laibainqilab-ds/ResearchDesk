@@ -1,0 +1,107 @@
+{
+  "experiment": "multi_query_retrieval",
+  "retrieval_only": true,
+  "evaluation_top_k": 5,
+  "dataset": {
+    "total_questions": 60,
+    "by_category": {
+      "direct": 19,
+      "multi_chunk": 10,
+      "multi_document": 5,
+      "multi_hop": 8,
+      "ambiguous": 5,
+      "follow_up": 3,
+      "unanswerable": 10
+    },
+    "answerable_questions": 50,
+    "unanswerable_questions": 10,
+    "documents_represented": [
+      "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+      "SCRIPT FOR DISCOVERY.pdf"
+    ]
+  },
+  "retrieval": {
+    "recall_at_3": 0.5966666666666667,
+    "precision_at_3": 0.28,
+    "hit_rate_at_3": 0.74,
+    "recall_at_5": 0.7633333333333333,
+    "precision_at_5": 0.23200000000000004,
+    "hit_rate_at_5": 0.88,
+    "mrr": 0.6284935064935064,
+    "questions_evaluated": 50
+  },
+  "answers": {
+    "correctness_counts": "N/A — retrieval-only run",
+    "faithfulness_counts": "N/A — retrieval-only run",
+    "citation_counts": {
+      "correct": 44,
+      "incorrect": 6,
+      "no_citations": 0,
+      "not_applicable": 0
+    }
+  },
+  "abstention": "N/A — retrieval-only run",
+  "performance": {
+    "average_latency_seconds": 13.190575226666745,
+    "median_latency_seconds": 8.354363300000841,
+    "min_latency_seconds": 1.3289426999981515,
+    "max_latency_seconds": 58.3609085999924,
+    "model_names_used": [
+      "gemini-3.5-flash-lite"
+    ],
+    "retrieval_latency_seconds": null,
+    "generation_latency_seconds": null,
+    "token_usage": null,
+    "unavailable_metrics_reason": "RAG.answer() performs query rewriting, multi-query generation, retrieval, and final generation as one call with no internal timing hooks exposed, so only total per-question latency can be measured without modifying app/rag.py (out of scope for this task). Token usage is unavailable because Generator.generate() in app/models/generator.py only returns the response text -- Ollama's /api/generate response does include eval_count/prompt_eval_count fields, but capturing them would require changing the Generator return interface, which risks changing LLM generation behavior and was out of scope here."
+  },
+  "failures": [
+    {
+      "id": "q005",
+      "category": "direct",
+      "question": "What is OpenGenome2, and how many DNA letters does it contain?",
+      "reasons": [
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q007",
+      "category": "direct",
+      "question": "What is the maximum context window, in tokens, that both versions of Evo 2 can process?",
+      "reasons": [
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q017",
+      "category": "multi_chunk",
+      "question": "What are SE, MR, and LI in Evo 2's architecture, and what does each one handle?",
+      "reasons": [
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q040",
+      "category": "ambiguous",
+      "question": "What does 'context' mean in this talk?",
+      "reasons": [
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q041",
+      "category": "ambiguous",
+      "question": "What does 'the model' refer to when the talk says it 'looked inside its internal workings' and found gene boundaries?",
+      "reasons": [
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q044",
+      "category": "ambiguous",
+      "question": "Who are 'the researchers' being referred to across the talk?",
+      "reasons": [
+        "incorrect_citation"
+      ]
+    }
+  ]
+}

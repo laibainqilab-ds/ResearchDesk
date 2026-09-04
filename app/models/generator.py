@@ -1,26 +1,25 @@
-import json
 import logging
 import os
-import urllib.error
-import urllib.request
 
 from dotenv import load_dotenv
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OLLAMA_BASE_URL = "https://wish-excited-organizational-difficulties.trycloudflare.com"
-DEFAULT_OLLAMA_MODEL = "qwen3.5:9b"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 REQUEST_TIMEOUT_SECONDS = 180
 
 
 class GenerationUnavailableError(Exception):
-    """Raised when the remote Ollama/Qwen server cannot fulfill a generation request.
+    """Raised when the Gemini backend cannot fulfill a generation request.
 
-    Wraps connection, timeout, HTTP, and malformed-response failures so callers
+    Wraps connection, timeout, API, and unusable-response failures so callers
     can degrade gracefully instead of crashing. The original exception is kept
     on `.original` for logging/debugging.
     """
@@ -32,66 +31,60 @@ class GenerationUnavailableError(Exception):
 
 class Generator:
     def __init__(self):
-        self.base_url = os.getenv("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL).rstrip("/")
-        self.model_name = os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+        api_key = os.getenv("GEMINI_API_KEY")
 
-    def generate(self, prompt: str) -> str:
-        payload = json.dumps(
-            {
-                "model": self.model_name,
-                "prompt": prompt,
-                "stream": False,
-            }
-        ).encode("utf-8")
+        if not api_key:
+            raise GenerationUnavailableError(
+                "GEMINI_API_KEY is not set. Add it to your .env file before "
+                "starting ResearchDesk."
+            )
 
-        request = urllib.request.Request(
-            f"{self.base_url}/api/generate",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
+        self.model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+        self.client = genai.Client(
+            api_key=api_key,
+            http_options=genai_types.HttpOptions(
+                timeout=REQUEST_TIMEOUT_SECONDS * 1000,
+            ),
         )
 
+    def generate(self, prompt: str) -> str:
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                raw_body = response.read()
-        except urllib.error.HTTPError as error:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+            )
+        except genai_errors.APIError as error:
             logger.warning(
-                "Ollama generation request failed with HTTP %s: %s",
+                "Gemini generation request failed with code %s: %s",
                 error.code,
                 error,
             )
             raise GenerationUnavailableError(
                 f"The answer-generation service returned an error "
-                f"(HTTP {error.code}) and could not generate an answer.",
+                f"(code {error.code}) and could not generate an answer.",
                 original=error,
             ) from error
-        except OSError as error:
-            # Covers URLError (DNS/connection failures), TimeoutError, and
-            # other socket-level errors when the remote server is unreachable.
-            logger.warning("Ollama generation request failed: %s", error)
+        except Exception as error:
+            # Covers connection failures, timeouts, and other transport-level
+            # errors from the underlying HTTP client that aren't raised as
+            # genai_errors.APIError.
+            logger.warning("Gemini generation request failed: %s", error)
             raise GenerationUnavailableError(
                 "The answer-generation service is temporarily unreachable. "
                 "Please check the connection and try again.",
                 original=error,
             ) from error
 
-        try:
-            body = json.loads(raw_body)
-        except json.JSONDecodeError as error:
-            logger.warning("Ollama returned malformed JSON: %s", raw_body[:200])
-            raise GenerationUnavailableError(
-                "The answer-generation service returned an unreadable response.",
-                original=error,
-            ) from error
+        text = getattr(response, "text", None)
 
-        if not isinstance(body, dict) or not isinstance(body.get("response"), str):
-            logger.warning("Ollama response missing 'response' field: %s", body)
+        if not isinstance(text, str) or not text.strip():
+            logger.warning("Gemini response contained no usable text: %r", response)
             raise GenerationUnavailableError(
                 "The answer-generation service returned an unexpected response format.",
                 original=None,
             )
 
-        return body["response"].strip()
+        return text.strip()
 
     def rewrite_query(
         self,
