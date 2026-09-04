@@ -1,4 +1,5 @@
 import logging
+import re
 
 from app.ingestion.embedder import Embedder
 from app.ingestion.reranker import Reranker
@@ -6,6 +7,117 @@ from app.ingestion.vector_store import VectorStore
 from app.models.generator import Generator, GenerationUnavailableError
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Conversation memory
+#
+# The conversation context passed to query rewriting is always bounded:
+# the most recent RECENT_HISTORY_SIZE messages, plus either a handful of
+# deterministically-selected older messages (cheap, no LLM call) or, once
+# the older portion grows past SUMMARIZATION_THRESHOLD_MESSAGES, a single
+# summarized message (one LLM call) in their place. It is never the raw,
+# unbounded conversation_history list.
+# ---------------------------------------------------------------------------
+
+RECENT_HISTORY_SIZE = 3
+RELEVANT_HISTORY_MAX_MESSAGES = 2
+RELEVANCE_MIN_SCORE = 0.15
+SUMMARIZATION_THRESHOLD_MESSAGES = 10
+
+_WORD_PATTERN = re.compile(r"[a-z0-9]+")
+
+_STOPWORDS = {
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "of", "in", "on", "at", "to", "for", "and", "or", "but", "with",
+    "about", "as", "by", "it", "its", "this", "that", "these", "those",
+    "what", "which", "who", "whom", "how", "do", "does", "did", "i",
+    "you", "he", "she", "we", "they", "them", "his", "her", "their",
+}
+
+
+def _content_words(text: str) -> set[str]:
+    words = _WORD_PATTERN.findall((text or "").lower())
+    return {word for word in words if word not in _STOPWORDS}
+
+
+def select_relevant_history(
+    question: str,
+    older_messages: list[dict],
+    max_messages: int = RELEVANT_HISTORY_MAX_MESSAGES,
+    min_score: float = RELEVANCE_MIN_SCORE,
+) -> list[dict]:
+    """Deterministic keyword-overlap relevance selection over older
+    conversation turns -- no LLM call.
+
+    Scores each older message by Jaccard word overlap with the current
+    question, keeps only messages at or above `min_score`, and returns at
+    most `max_messages` of them in their original chronological order (so
+    the resulting context still reads as a coherent partial conversation,
+    not a relevance-sorted jumble).
+    """
+    question_words = _content_words(question)
+
+    if not question_words or not older_messages:
+        return []
+
+    scored_indices = []
+
+    for index, message in enumerate(older_messages):
+        message_words = _content_words(message.get("content", ""))
+
+        if not message_words:
+            continue
+
+        overlap = question_words & message_words
+        union = question_words | message_words
+        score = len(overlap) / len(union) if union else 0.0
+
+        if score >= min_score:
+            scored_indices.append((score, index))
+
+    scored_indices.sort(key=lambda item: item[0], reverse=True)
+    selected_indices = {index for _, index in scored_indices[:max_messages]}
+
+    return [
+        message
+        for index, message in enumerate(older_messages)
+        if index in selected_indices
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Citations
+#
+# Evidence sent to the LLM is numbered [1], [2], ... matching sources[i]
+# 1:1. The model is instructed to cite using only those markers, but its
+# citations are never trusted at face value -- extract_citations() parses
+# them back out of the generated text and checks each one against the real
+# evidence list; anything out of range is reported as invalid, not silently
+# resolved into a citation.
+# ---------------------------------------------------------------------------
+
+CITATION_PATTERN = re.compile(r"\[(\d+)\]")
+
+
+def extract_citations(answer_text: str | None, sources: list[dict]) -> dict:
+    if not answer_text:
+        return {"valid": [], "invalid": [], "citation_map": {}}
+
+    found_numbers = sorted({int(match) for match in CITATION_PATTERN.findall(answer_text)})
+
+    valid = []
+    invalid = []
+    citation_map = {}
+
+    for number in found_numbers:
+        if 1 <= number <= len(sources):
+            valid.append(number)
+            citation_map[number] = sources[number - 1]
+        else:
+            invalid.append(number)
+
+    return {"valid": valid, "invalid": invalid, "citation_map": citation_map}
 
 
 class RAG:
@@ -164,6 +276,51 @@ class RAG:
             "final_evidence": final_evidence,
         }
 
+    def _summarize_older_history(self, older_messages: list[dict]) -> str | None:
+        try:
+            return self.generator.summarize_conversation(older_messages)
+        except GenerationUnavailableError as error:
+            logger.warning(
+                "Conversation summarization unavailable, falling back to "
+                "relevance selection: %s",
+                error,
+            )
+            return None
+
+    def _prepare_conversation_context(
+        self,
+        conversation_history: list[dict],
+        question: str,
+    ) -> list[dict]:
+        """Bounded context for query rewriting: recent-N messages are always
+        included; older messages are either relevance-filtered (small
+        history) or condensed into one summary message via a single Gemini
+        call (large history) -- never passed through unbounded."""
+        if not conversation_history:
+            return []
+
+        recent = conversation_history[-RECENT_HISTORY_SIZE:]
+        older = conversation_history[:-RECENT_HISTORY_SIZE]
+
+        if not older:
+            return recent
+
+        if len(older) > SUMMARIZATION_THRESHOLD_MESSAGES:
+            summary = self._summarize_older_history(older)
+
+            if summary:
+                return [
+                    {
+                        "role": "system",
+                        "content": f"Summary of earlier conversation: {summary}",
+                    }
+                ] + recent
+            # Summarization unavailable -- fall through to relevance
+            # selection rather than silently dropping older context.
+
+        relevant = select_relevant_history(question, older)
+        return relevant + recent
+
     def answer(
         self,
         question: str,
@@ -177,13 +334,21 @@ class RAG:
     ) -> dict:
         conversation_history = conversation_history or []
 
-        recent_history = conversation_history[-3:]
+        # Conversation-context preparation (and its possible summarization
+        # Gemini call) only ever runs when rewriting is actually enabled --
+        # experiments/callers with enable_query_rewrite=False must see zero
+        # additional Gemini calls from conversation memory, unchanged from
+        # before this existed.
+        if enable_query_rewrite:
+            prepared_history = self._prepare_conversation_context(conversation_history, question)
+        else:
+            prepared_history = []
 
-        if enable_query_rewrite and recent_history:
+        if enable_query_rewrite and prepared_history:
             try:
                 retrieval_question = self.generator.rewrite_query(
                     question=question,
-                    conversation_history=recent_history,
+                    conversation_history=prepared_history,
                 )
             except GenerationUnavailableError as error:
                 logger.warning("Query rewriting unavailable, using original question: %s", error)
@@ -220,10 +385,12 @@ class RAG:
                     "provided documents to answer this question."
                 ),
                 "sources": [],
+                "citations": {"valid": [], "invalid": [], "citation_map": {}},
                 "retrieval": {
                     "original_question": question,
                     "rewritten_question": retrieval_question,
                     "search_queries": search_queries,
+                    "prepared_history": prepared_history,
                     "candidates": [],
                     "final_evidence": [],
                 },
@@ -233,7 +400,7 @@ class RAG:
         context_parts = []
         sources = []
 
-        for result in selected_results:
+        for citation_id, result in enumerate(selected_results, start=1):
             document = result["document"]
 
             source = result["filename"]
@@ -241,16 +408,17 @@ class RAG:
             chunk_id = result["chunk_id"]
 
             if page is not None:
-                source_info = f"{source}, page {page}"
+                location = f"{source} — page {page} — chunk_{chunk_id}"
             else:
-                source_info = source
+                location = f"{source} — chunk_{chunk_id}"
 
             context_parts.append(
-                f"[Source: {source_info}]\n{document}"
+                f"[{citation_id}] {location}\n{document}"
             )
 
             sources.append(
                 {
+                    "citation_id": citation_id,
                     "document_id": result["document_id"],
                     "filename": source,
                     "page_number": page,
@@ -263,10 +431,12 @@ class RAG:
             return {
                 "answer": None,
                 "sources": sources,
+                "citations": {"valid": [], "invalid": [], "citation_map": {}},
                 "retrieval": {
                     "original_question": question,
                     "rewritten_question": retrieval_question,
                     "search_queries": search_queries,
+                    "prepared_history": prepared_history,
                     "candidates": retrieval["candidates"],
                     "final_evidence": retrieval["final_evidence"],
                 },
@@ -276,15 +446,20 @@ class RAG:
         context = "\n\n".join(context_parts)
 
         prompt = f"""
-Answer the question using only the context below.
+Answer the question using only the evidence below.
 
-Context:
+Evidence:
 {context}
 
 Question:
 {question}
 
-Give a complete answer in 2 sentences.
+Instructions:
+- Answer only using the evidence above. Do not use outside knowledge.
+- Cite every factual claim using the evidence numbers in brackets, e.g. [1], [2].
+- If a claim depends on more than one piece of evidence, cite all of them, e.g. [1][2].
+- Never invent, guess, or reformat a filename, page number, or source detail -- the bracketed evidence numbers are the only citations you may use.
+- If the evidence does not contain enough information to answer, say so directly instead of guessing.
 
 Answer:
 """
@@ -299,13 +474,17 @@ Answer:
                 "message": str(generation_error),
             }
 
+        citations = extract_citations(answer, sources)
+
         return {
             "answer": answer,
             "sources": sources,
+            "citations": citations,
             "retrieval": {
                 "original_question": question,
                 "rewritten_question": retrieval_question,
                 "search_queries": search_queries,
+                "prepared_history": prepared_history,
                 "candidates": retrieval["candidates"],
                 "final_evidence": retrieval["final_evidence"],
             },

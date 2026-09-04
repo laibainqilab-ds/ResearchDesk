@@ -8,7 +8,13 @@ ChromaDB, and never make a live Gemini call.
 import logging
 from unittest.mock import Mock
 
-from app.rag import RAG
+from app.rag import (
+    RAG,
+    RECENT_HISTORY_SIZE,
+    RELEVANT_HISTORY_MAX_MESSAGES,
+    extract_citations,
+    select_relevant_history,
+)
 
 
 def make_rag():
@@ -330,6 +336,7 @@ def test_answer_generation_disabled_still_populates_retrieval_and_sources():
 
     assert result["sources"] == [
         {
+            "citation_id": 1,
             "document_id": "docA",
             "filename": "doc.pdf",
             "page_number": 3,
@@ -381,3 +388,308 @@ def test_answer_all_stages_disabled_uses_original_question_as_only_search_query(
     rag.generator.generate_queries.assert_not_called()
     assert rag.retrieve.call_args.kwargs["search_queries"] == ["a question"]
     assert rag.retrieve.call_args.kwargs["enable_reranking"] is False
+
+
+# ---------------------------------------------------------------------------
+# Conversation memory -- recent / relevant-older / summarization
+# ---------------------------------------------------------------------------
+
+def _paris_ml_eiffel_history():
+    """6-message history: an older Paris exchange, an older unrelated ML
+    exchange, then a recent Eiffel Tower exchange. Deliberately built so a
+    "Paris" follow-up question should pull in the Paris exchange (shares
+    vocabulary) despite it falling outside the last-3 window, while leaving
+    the unrelated ML exchange behind."""
+    return [
+        {"role": "user", "content": "What is the capital of France?"},
+        {"role": "assistant", "content": "The capital of France is Paris."},
+        {"role": "user", "content": "What is machine learning?"},
+        {"role": "assistant", "content": "Machine learning is a subset of AI."},
+        {"role": "user", "content": "How tall is the Eiffel Tower?"},
+        {"role": "assistant", "content": "The Eiffel Tower is 330 meters tall."},
+    ]
+
+
+def test_prepare_context_preserves_recent_conversation_when_history_is_short():
+    rag = make_rag()
+    history = [
+        {"role": "user", "content": "What is Evo 2?"},
+        {"role": "assistant", "content": "Evo 2 is a genomic model."},
+    ]
+
+    prepared = rag._prepare_conversation_context(history, "What is it used for?")
+
+    assert prepared == history
+
+
+def test_prepare_context_selects_relevant_older_message():
+    rag = make_rag()
+    history = _paris_ml_eiffel_history()
+
+    prepared = rag._prepare_conversation_context(history, "Tell me more about Paris")
+
+    # Shares "Paris" with the question, so it should be pulled forward even
+    # though it's outside the plain last-3 window.
+    assert history[1] in prepared
+    # Mentions France but never says "Paris" -- no overlap, correctly left out.
+    assert history[0] not in prepared
+
+
+def test_prepare_context_excludes_irrelevant_older_message():
+    rag = make_rag()
+    history = _paris_ml_eiffel_history()
+
+    prepared = rag._prepare_conversation_context(history, "Tell me more about Paris")
+
+    # "What is machine learning?" is in the older portion and shares no
+    # vocabulary with the Paris question -- must not be blindly carried
+    # forward just because it's part of the conversation.
+    assert history[2] not in prepared
+
+
+def test_prepare_context_history_remains_bounded():
+    rag = make_rag()
+    history = [
+        {
+            "role": "user" if i % 2 == 0 else "assistant",
+            "content": f"Message number {i} about topic {i}.",
+        }
+        for i in range(10)
+    ]
+
+    prepared = rag._prepare_conversation_context(history, "What is Evo 2 used for?")
+
+    assert len(prepared) <= RECENT_HISTORY_SIZE + RELEVANT_HISTORY_MAX_MESSAGES
+    assert len(prepared) < len(history)
+
+
+def test_summarization_not_triggered_below_threshold():
+    rag = make_rag()
+    # 13 messages -> older = 10, exactly at the threshold, not exceeding it.
+    history = [{"role": "user", "content": f"Question {i}"} for i in range(13)]
+
+    rag._prepare_conversation_context(history, "Question 12")
+
+    rag.generator.summarize_conversation.assert_not_called()
+
+
+def test_summarization_triggered_above_threshold():
+    rag = make_rag()
+    rag.generator.summarize_conversation.return_value = "They discussed several earlier topics."
+    # 14 messages -> older = 11, exceeding the threshold of 10.
+    history = [{"role": "user", "content": f"Question {i}"} for i in range(14)]
+
+    prepared = rag._prepare_conversation_context(history, "Question 13")
+
+    rag.generator.summarize_conversation.assert_called_once()
+    assert prepared[0]["role"] == "system"
+    assert "They discussed several earlier topics." in prepared[0]["content"]
+    assert len(prepared) == 1 + RECENT_HISTORY_SIZE
+
+
+def test_answer_rewrite_receives_prepared_context_not_just_recent_slice():
+    rag = make_rag()
+    rag.generator.rewrite_query.return_value = "standalone question"
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.retrieve = Mock(return_value={"candidates": [], "final_evidence": []})
+
+    history = _paris_ml_eiffel_history()
+
+    rag.answer(question="Tell me more about Paris", conversation_history=history)
+
+    actual_context = rag.generator.rewrite_query.call_args.kwargs["conversation_history"]
+
+    # Proves answer() passes the *prepared* context (recent + relevant
+    # older), not the naive history[-3:] slice: the relevant older Paris
+    # message must be present even though it falls outside the last 3.
+    assert history[1] in actual_context
+    assert actual_context != history[-3:]
+
+
+def test_select_relevant_history_returns_empty_when_no_overlap():
+    older = [{"role": "user", "content": "What is machine learning?"}]
+
+    result = select_relevant_history("Tell me about Paris", older)
+
+    assert result == []
+
+
+def test_select_relevant_history_caps_at_max_messages():
+    older = [
+        {"role": "user", "content": "Tell me about Paris landmarks"},
+        {"role": "assistant", "content": "Paris has many landmarks"},
+        {"role": "user", "content": "Paris is also known for its food"},
+    ]
+
+    result = select_relevant_history("What about Paris?", older, max_messages=1)
+
+    assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# Citations -- extract_citations()
+# ---------------------------------------------------------------------------
+
+def _sample_sources():
+    return [
+        {
+            "citation_id": 1,
+            "document_id": "docA",
+            "filename": "a.pdf",
+            "page_number": 1,
+            "chunk_id": 0,
+            "rerank_score": 0.9,
+        },
+        {
+            "citation_id": 2,
+            "document_id": "docB",
+            "filename": "b.pdf",
+            "page_number": 4,
+            "chunk_id": 3,
+            "rerank_score": 0.8,
+        },
+    ]
+
+
+def test_extract_citations_valid_single_citation():
+    sources = _sample_sources()
+
+    result = extract_citations("The system uses X [1].", sources)
+
+    assert result["valid"] == [1]
+    assert result["invalid"] == []
+    assert result["citation_map"][1] == sources[0]
+
+
+def test_extract_citations_supports_multiple_citations():
+    sources = _sample_sources()
+
+    result = extract_citations("This claim relies on two sources [1][2].", sources)
+
+    assert result["valid"] == [1, 2]
+    assert result["citation_map"][1] == sources[0]
+    assert result["citation_map"][2] == sources[1]
+
+
+def test_extract_citations_detects_invalid_out_of_range_citation():
+    sources = _sample_sources()
+
+    result = extract_citations("According to the evidence [5], this is true.", sources)
+
+    assert result["valid"] == []
+    assert result["invalid"] == [5]
+    assert 5 not in result["citation_map"]
+
+
+def test_extract_citations_separates_valid_and_invalid_in_same_answer():
+    sources = _sample_sources()
+
+    result = extract_citations(
+        "Fact A is supported [1], but fact B cites a bad source [9].", sources
+    )
+
+    assert result["valid"] == [1]
+    assert result["invalid"] == [9]
+    assert result["citation_map"] == {1: sources[0]}
+
+
+def test_extract_citations_no_markers_returns_empty():
+    sources = _sample_sources()
+
+    result = extract_citations("No citations here at all.", sources)
+
+    assert result == {"valid": [], "invalid": [], "citation_map": {}}
+
+
+def test_extract_citations_none_answer_returns_empty():
+    sources = _sample_sources()
+
+    result = extract_citations(None, sources)
+
+    assert result == {"valid": [], "invalid": [], "citation_map": {}}
+
+
+# ---------------------------------------------------------------------------
+# Citations -- RAG.answer() integration
+# ---------------------------------------------------------------------------
+
+def test_answer_evidence_receives_stable_sequential_citation_ids():
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.generator.generate.return_value = "An answer with no citations."
+    rag.reranker.rerank.return_value = [("chunk-a", 0.9), ("chunk-b", 0.5)]
+
+    rag.store.search.return_value = search_result([
+        ("chunk-a", metadata("docA", 0), 0.2),
+        ("chunk-b", metadata("docB", 1), 0.3),
+    ])
+
+    result = rag.answer(question="a question", conversation_history=[])
+
+    citation_ids = [source["citation_id"] for source in result["sources"]]
+    assert citation_ids == [1, 2]
+
+
+def test_answer_citation_map_points_to_real_evidence_metadata():
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.generator.generate.return_value = "The system supports this claim [1]."
+    rag.reranker.rerank.return_value = [("chunk-a", 0.9)]
+
+    rag.store.search.return_value = search_result([
+        ("chunk-a", metadata("docA", 7, page_number=5, filename="real.pdf"), 0.2),
+    ])
+
+    result = rag.answer(question="a question", conversation_history=[])
+
+    assert result["citations"]["valid"] == [1]
+    cited_source = result["citations"]["citation_map"][1]
+    assert cited_source["filename"] == "real.pdf"
+    assert cited_source["page_number"] == 5
+    assert cited_source["chunk_id"] == 7
+    assert cited_source["document_id"] == "docA"
+
+
+def test_answer_detects_invalid_citation_from_generated_text():
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    # Only one piece of evidence is ever supplied, but the model cites [3].
+    rag.generator.generate.return_value = "This is supported by evidence [3]."
+    rag.reranker.rerank.return_value = [("chunk-a", 0.9)]
+
+    rag.store.search.return_value = search_result([
+        ("chunk-a", metadata("docA", 0), 0.2),
+    ])
+
+    result = rag.answer(question="a question", conversation_history=[])
+
+    assert result["citations"]["valid"] == []
+    assert result["citations"]["invalid"] == [3]
+    assert 3 not in result["citations"]["citation_map"]
+
+
+def test_citation_metadata_is_never_taken_from_generated_text():
+    """Citation metadata must come entirely from the retrieved chunk's own
+    metadata -- never by trusting/parsing anything the LLM said. Here the
+    model's answer text names a filename/page that don't correspond to any
+    real evidence; the citation map for the marker it used must still
+    resolve strictly to the real evidence Python already built, not to
+    whatever the model claimed inline.
+    """
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.generator.generate.return_value = (
+        "According to fake-document.pdf, page 999 [1], the answer is X."
+    )
+    rag.reranker.rerank.return_value = [("chunk-a", 0.9)]
+
+    rag.store.search.return_value = search_result([
+        ("chunk-a", metadata("docA", 0, page_number=1, filename="real.pdf"), 0.2),
+    ])
+
+    result = rag.answer(question="a question", conversation_history=[])
+
+    cited_source = result["citations"]["citation_map"][1]
+    assert cited_source["filename"] == "real.pdf"
+    assert cited_source["page_number"] == 1
+    assert "fake-document.pdf" not in str(cited_source.values())
