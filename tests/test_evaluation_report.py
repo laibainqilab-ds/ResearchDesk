@@ -1,4 +1,6 @@
-from evaluation import report
+from pathlib import Path
+
+from evaluation import experiments, report
 
 
 def make_dataset_by_id():
@@ -220,3 +222,146 @@ def test_failures_do_not_flag_none_answer_as_incorrect_in_retrieval_only_mode():
     assert "unsupported_claim" not in reasons
     assert "missed_abstention" not in reasons
     assert "unexpected_abstention" not in reasons
+
+
+# ---------------------------------------------------------------------------
+# Evaluation UI helpers (Phase 7): report discovery, safe loading, labeling,
+# availability checks, and the five-experiment comparison.
+# ---------------------------------------------------------------------------
+
+def test_discover_reports_finds_only_rag_report_files(tmp_path):
+    (tmp_path / "rag_report.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "rag_report_basic_vector_retrieval.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "rag_results.json").write_text("{}", encoding="utf-8")  # not a report file
+    (tmp_path / "rag_evaluation.json").write_text("{}", encoding="utf-8")  # dataset, not a report
+
+    found = report.discover_reports(reports_dir=tmp_path)
+    found_names = {path.name for path in found}
+
+    assert found_names == {"rag_report.json", "rag_report_basic_vector_retrieval.json"}
+
+
+def test_load_report_safely_returns_none_for_missing_file(tmp_path):
+    assert report.load_report_safely(tmp_path / "does_not_exist.json") is None
+
+
+def test_load_report_safely_returns_none_for_malformed_json(tmp_path):
+    bad_file = tmp_path / "bad.json"
+    bad_file.write_text("{not valid json", encoding="utf-8")
+
+    assert report.load_report_safely(bad_file) is None
+
+
+def test_load_report_safely_returns_parsed_dict_for_valid_json(tmp_path):
+    good_file = tmp_path / "good.json"
+    good_file.write_text('{"experiment": "test"}', encoding="utf-8")
+
+    assert report.load_report_safely(good_file) == {"experiment": "test"}
+
+
+def test_report_label_indicates_retrieval_only_mode():
+    label = report.report_label(
+        Path("rag_report_x.json"),
+        {"experiment": "multi_query_retrieval", "retrieval_only": True},
+    )
+
+    assert "multi_query_retrieval" in label
+    assert "retrieval-only" in label
+
+
+def test_report_label_indicates_full_generation_mode():
+    label = report.report_label(
+        Path("rag_report_x.json"),
+        {"experiment": "final_pipeline", "retrieval_only": False},
+    )
+
+    assert "full generation" in label
+
+
+def test_has_dict_metric_true_for_real_dict():
+    assert report.has_dict_metric({"abstention": {"correct_abstentions": 4}}, "abstention") is True
+
+
+def test_has_dict_metric_false_for_na_sentinel_string():
+    assert report.has_dict_metric({"abstention": "N/A — retrieval-only run"}, "abstention") is False
+
+
+def test_has_dict_metric_checks_nested_answers_key():
+    report_data = {
+        "answers": {
+            "correctness_counts": {"correct": 1},
+            "faithfulness_counts": "N/A — retrieval-only run",
+        }
+    }
+
+    assert report.has_dict_metric(report_data, "answers", "correctness_counts") is True
+    assert report.has_dict_metric(report_data, "answers", "faithfulness_counts") is False
+
+
+def test_has_dict_metric_false_when_section_missing():
+    assert report.has_dict_metric({}, "abstention") is False
+
+
+def test_token_usage_message_reports_unavailable_without_ollama_wording():
+    message = report.token_usage_message({
+        "token_usage": None,
+        "unavailable_metrics_reason": "...Ollama's /api/generate...",
+    })
+
+    assert "Ollama" not in message
+    assert message == (
+        "Token usage unavailable: the current generator does not expose token usage metadata."
+    )
+
+
+def test_token_usage_message_shows_real_value_when_available():
+    message = report.token_usage_message({"token_usage": {"total_tokens": 123}})
+
+    assert "123" in message
+
+
+def test_build_experiment_comparison_rows_covers_all_five_experiments_in_order():
+    rows = report.build_experiment_comparison_rows()
+
+    assert [row["experiment"] for row in rows] == experiments.experiment_names()
+    assert len(rows) == 5
+
+
+def test_build_experiment_comparison_rows_uses_real_existing_reports():
+    # These retrieval-only report files already exist in evaluation/ from
+    # completed Phase 5 runs -- this exercises the real reuse path, not a
+    # synthetic fixture, per "use the existing report JSONs as source of truth".
+    rows = report.build_experiment_comparison_rows()
+    by_name = {row["experiment"]: row for row in rows}
+
+    assert by_name["multi_query_plus_reranking"]["available"] is True
+    assert by_name["multi_query_plus_reranking"]["retrieval_only"] is True
+    assert isinstance(by_name["multi_query_plus_reranking"]["mrr"], float)
+
+
+def test_summarize_best_retrieval_configuration_returns_none_when_data_missing():
+    rows = [
+        {
+            "experiment": "multi_query_plus_reranking",
+            "available": False,
+            "mrr": None,
+            "average_latency_seconds": None,
+        },
+        {
+            "experiment": "final_pipeline",
+            "available": False,
+            "mrr": None,
+            "average_latency_seconds": None,
+        },
+    ]
+
+    assert report.summarize_best_retrieval_configuration(rows) is None
+
+
+def test_summarize_best_retrieval_configuration_uses_real_reports():
+    rows = report.build_experiment_comparison_rows()
+    summary = report.summarize_best_retrieval_configuration(rows)
+
+    assert summary is not None
+    assert "multi_query_plus_reranking" in summary
+    assert "retrieval-quality" in summary
