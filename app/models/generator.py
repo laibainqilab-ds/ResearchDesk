@@ -94,9 +94,13 @@ class Generator:
         if not conversation_history:
             return question
 
+        # conversation_history is expected to already be bounded by the
+        # caller (RAG._prepare_conversation_context: recent messages plus
+        # either a few relevance-selected older ones or a single summary
+        # message) -- it is used as given, not re-truncated here.
         history_text = "\n".join(
             f"{message['role']}: {message['content']}"
-            for message in conversation_history[-3:]
+            for message in conversation_history
         )
 
         prompt = f"""
@@ -160,3 +164,28 @@ Search queries:
         ]
 
         return queries[:num_queries]
+
+    def summarize_conversation(self, messages: list[dict]) -> str:
+        if not messages:
+            return ""
+
+        conversation_text = "\n".join(
+            f"{message['role']}: {message['content']}"
+            for message in messages
+        )
+
+        prompt = f"""
+Summarize the following earlier conversation in 2-3 sentences, preserving
+any facts, names, numbers, or topics that later questions might refer back
+to.
+
+Do not answer any question.
+Return only the summary.
+
+Conversation:
+{conversation_text}
+
+Summary:
+"""
+
+        return self.generate(prompt).strip()
