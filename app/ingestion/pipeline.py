@@ -5,6 +5,7 @@ from pathlib import Path
 from app.ingestion.chunker import chunk_pages
 from app.ingestion.parsers import UnsupportedFileTypeError, parse_document
 from app.ingestion.text_cleaner import clean_text
+from app.observability import log_event, new_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def compute_document_id(file_bytes: bytes) -> str:
     return hashlib.sha256(file_bytes).hexdigest()
 
 
-def ingest_file(file_path: str, filename: str, store, embedder) -> dict:
+def ingest_file(file_path: str, filename: str, store, embedder, trace_id: str | None = None) -> dict:
     """Parse, chunk, embed, and store a single file.
 
     `store` must provide count_document_chunks, add_documents, delete_document.
@@ -46,6 +47,10 @@ def ingest_file(file_path: str, filename: str, store, embedder) -> dict:
     or DocumentParsingError. On success returns a summary dict with
     document_id, filename, file_type, page_count, and chunk_count.
     """
+    trace_id = trace_id or new_trace_id()
+
+    log_event(trace_id, "ingestion_started", filename=filename)
+
     path = Path(file_path)
     file_bytes = path.read_bytes()
     document_id = compute_document_id(file_bytes)
@@ -53,13 +58,35 @@ def ingest_file(file_path: str, filename: str, store, embedder) -> dict:
     existing_chunk_count = store.count_document_chunks(document_id)
 
     if existing_chunk_count > 0:
+        log_event(
+            trace_id,
+            "ingestion_duplicate_rejected",
+            level=logging.INFO,
+            filename=filename,
+            document_id=document_id,
+            existing_chunk_count=existing_chunk_count,
+        )
         raise DuplicateDocumentError(document_id, filename, existing_chunk_count)
 
     try:
         pages, file_type = parse_document(file_path, filename)
-    except UnsupportedFileTypeError:
+    except UnsupportedFileTypeError as error:
+        log_event(
+            trace_id,
+            "ingestion_unsupported_file_type",
+            level=logging.WARNING,
+            filename=filename,
+            error=str(error),
+        )
         raise
     except Exception as error:
+        log_event(
+            trace_id,
+            "ingestion_parsing_failed",
+            level=logging.WARNING,
+            filename=filename,
+            error=str(error),
+        )
         raise DocumentParsingError(f"Failed to parse '{filename}': {error}") from error
 
     cleaned_pages = [
@@ -71,6 +98,13 @@ def ingest_file(file_path: str, filename: str, store, embedder) -> dict:
     ]
 
     if not any(page["text"] for page in cleaned_pages):
+        log_event(
+            trace_id,
+            "ingestion_empty_document",
+            level=logging.WARNING,
+            filename=filename,
+            page_count=len(cleaned_pages),
+        )
         raise EmptyDocumentError(f"'{filename}' contains no usable text after cleaning.")
 
     chunks = chunk_pages(
@@ -99,6 +133,15 @@ def ingest_file(file_path: str, filename: str, store, embedder) -> dict:
             filename,
             error,
         )
+        log_event(
+            trace_id,
+            "ingestion_embedding_or_storage_failed",
+            level=logging.WARNING,
+            filename=filename,
+            document_id=document_id,
+            chunk_count=len(chunks),
+            error=str(error),
+        )
         store.delete_document(document_id)
         raise DocumentParsingError(
             f"Failed to embed or store '{filename}': {error}"
@@ -107,6 +150,15 @@ def ingest_file(file_path: str, filename: str, store, embedder) -> dict:
     page_numbers = [
         page["page_number"] for page in cleaned_pages if page["page_number"] is not None
     ]
+
+    log_event(
+        trace_id,
+        "ingestion_completed",
+        filename=filename,
+        document_id=document_id,
+        file_type=file_type,
+        chunk_count=len(chunks),
+    )
 
     return {
         "document_id": document_id,

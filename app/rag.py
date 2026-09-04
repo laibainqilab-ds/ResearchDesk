@@ -1,10 +1,12 @@
 import logging
 import re
+import time
 
 from app.ingestion.embedder import Embedder
 from app.ingestion.reranker import Reranker
 from app.ingestion.vector_store import VectorStore
 from app.models.generator import Generator, GenerationUnavailableError
+from app.observability import configure_logging, log_event, new_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +102,11 @@ def select_relevant_history(
 CITATION_PATTERN = re.compile(r"\[(\d+)\]")
 
 
-def extract_citations(answer_text: str | None, sources: list[dict]) -> dict:
+def extract_citations(
+    answer_text: str | None,
+    sources: list[dict],
+    trace_id: str | None = None,
+) -> dict:
     if not answer_text:
         return {"valid": [], "invalid": [], "citation_map": {}}
 
@@ -117,11 +123,21 @@ def extract_citations(answer_text: str | None, sources: list[dict]) -> dict:
         else:
             invalid.append(number)
 
+    log_event(
+        trace_id,
+        "citation_validation_completed",
+        level=logging.WARNING if invalid else logging.INFO,
+        valid_citations=valid,
+        invalid_citations=invalid,
+        evidence_count=len(sources),
+    )
+
     return {"valid": valid, "invalid": invalid, "citation_map": citation_map}
 
 
 class RAG:
     def __init__(self):
+        configure_logging()
         self.embedder = Embedder()
         self.store = VectorStore()
         self.generator = Generator()
@@ -134,7 +150,10 @@ class RAG:
         top_k: int = 3,
         document_id: str | None = None,
         enable_reranking: bool = True,
+        trace_id: str | None = None,
     ) -> dict:
+        trace_id = trace_id or new_trace_id()
+
         where = None
 
         if document_id:
@@ -142,16 +161,40 @@ class RAG:
 
         candidate_k = max(top_k * 3, 10)
 
+        log_event(
+            trace_id,
+            "retrieval_started",
+            search_queries=search_queries,
+            top_k=top_k,
+            candidate_k=candidate_k,
+            document_id=document_id,
+            enable_reranking=enable_reranking,
+        )
+
         all_results = []
 
         for search_query in search_queries:
-            query_embedding = self.embedder.embed([search_query])[0]
+            try:
+                query_embedding = self.embedder.embed([search_query])[0]
 
-            results = self.store.search(
-                query_embedding=query_embedding,
-                n_results=candidate_k,
-                where=where,
-            )
+                results = self.store.search(
+                    query_embedding=query_embedding,
+                    n_results=candidate_k,
+                    where=where,
+                )
+            except Exception as error:
+                # Embedding or vector-store failure for this one search
+                # query -- log and skip it rather than failing the whole
+                # request; the other search queries (or, for single-query
+                # retrieval, the empty-candidates path below) still apply.
+                log_event(
+                    trace_id,
+                    "vector_search_failed",
+                    level=logging.WARNING,
+                    search_query=search_query,
+                    error=str(error),
+                )
+                continue
 
             documents = results["documents"][0]
             metadatas = results["metadatas"][0]
@@ -185,6 +228,12 @@ class RAG:
                     "(missing document_id and/or chunk_id): %r",
                     metadata,
                 )
+                log_event(
+                    trace_id,
+                    "malformed_chunk_skipped",
+                    level=logging.WARNING,
+                    metadata=metadata,
+                )
                 continue
 
             chunk_key = (candidate_document_id, candidate_chunk_id)
@@ -199,37 +248,79 @@ class RAG:
         candidates = list(unique_results.values())
 
         if not candidates:
+            log_event(trace_id, "retrieval_empty", level=logging.WARNING, search_queries=search_queries)
             return {
                 "candidates": [],
                 "final_evidence": [],
             }
 
-        if enable_reranking:
-            candidate_documents = [
-                candidate["document"]
+        log_event(
+            trace_id,
+            "retrieval_candidates_selected",
+            candidate_count=len(candidates),
+            chunk_ids=[
+                {
+                    "document_id": candidate["metadata"].get("document_id"),
+                    "chunk_id": candidate["metadata"].get("chunk_id"),
+                    "distance": candidate["distance"],
+                }
                 for candidate in candidates
-            ]
+            ],
+        )
 
-            reranked_documents = self.reranker.rerank(
-                query=retrieval_question,
-                documents=candidate_documents,
-            )
-
-            reranked_lookup = {
-                document: score
-                for document, score in reranked_documents
-            }
-
-            for candidate in candidates:
-                candidate["rerank_score"] = reranked_lookup[
+        if enable_reranking:
+            try:
+                candidate_documents = [
                     candidate["document"]
+                    for candidate in candidates
                 ]
 
-            ranked_candidates = sorted(
-                candidates,
-                key=lambda result: result["rerank_score"],
-                reverse=True,
-            )
+                reranked_documents = self.reranker.rerank(
+                    query=retrieval_question,
+                    documents=candidate_documents,
+                )
+
+                reranked_lookup = {
+                    document: score
+                    for document, score in reranked_documents
+                }
+
+                for candidate in candidates:
+                    candidate["rerank_score"] = reranked_lookup[
+                        candidate["document"]
+                    ]
+
+                ranked_candidates = sorted(
+                    candidates,
+                    key=lambda result: result["rerank_score"],
+                    reverse=True,
+                )
+
+                log_event(
+                    trace_id,
+                    "reranking_completed",
+                    candidate_count=len(candidates),
+                    rerank_scores=[candidate["rerank_score"] for candidate in ranked_candidates],
+                )
+            except Exception as error:
+                # Local cross-encoder failure -- log and gracefully degrade
+                # to the same distance-sort behavior as enable_reranking=False
+                # rather than failing the whole request.
+                log_event(
+                    trace_id,
+                    "reranking_failed",
+                    level=logging.WARNING,
+                    error=str(error),
+                    candidate_count=len(candidates),
+                )
+
+                for candidate in candidates:
+                    candidate["rerank_score"] = None
+
+                ranked_candidates = sorted(
+                    candidates,
+                    key=lambda result: result["distance"],
+                )
         else:
             for candidate in candidates:
                 candidate["rerank_score"] = None
@@ -271,15 +362,31 @@ class RAG:
             for result in selected_results
         ]
 
+        log_event(
+            trace_id,
+            "final_evidence_selected",
+            evidence_count=len(final_evidence),
+            chunk_ids=[
+                {"document_id": item["document_id"], "chunk_id": item["chunk_id"]}
+                for item in final_evidence
+            ],
+        )
+
         return {
             "candidates": inspector_candidates,
             "final_evidence": final_evidence,
         }
 
-    def _summarize_older_history(self, older_messages: list[dict]) -> str | None:
+    def _summarize_older_history(self, older_messages: list[dict], trace_id: str | None = None) -> str | None:
         try:
-            return self.generator.summarize_conversation(older_messages)
+            return self.generator.summarize_conversation(older_messages, trace_id=trace_id)
         except GenerationUnavailableError as error:
+            log_event(
+                trace_id,
+                "conversation_summarization_failed",
+                level=logging.WARNING,
+                error=str(error),
+            )
             logger.warning(
                 "Conversation summarization unavailable, falling back to "
                 "relevance selection: %s",
@@ -291,6 +398,7 @@ class RAG:
         self,
         conversation_history: list[dict],
         question: str,
+        trace_id: str | None = None,
     ) -> list[dict]:
         """Bounded context for query rewriting: recent-N messages are always
         included; older messages are either relevance-filtered (small
@@ -306,7 +414,7 @@ class RAG:
             return recent
 
         if len(older) > SUMMARIZATION_THRESHOLD_MESSAGES:
-            summary = self._summarize_older_history(older)
+            summary = self._summarize_older_history(older, trace_id=trace_id)
 
             if summary:
                 return [
@@ -331,8 +439,24 @@ class RAG:
         enable_multi_query: bool = True,
         enable_reranking: bool = True,
         enable_answer_generation: bool = True,
+        trace_id: str | None = None,
     ) -> dict:
+        trace_id = trace_id or new_trace_id()
+        request_start = time.perf_counter()
+
         conversation_history = conversation_history or []
+
+        log_event(
+            trace_id,
+            "request_started",
+            question=question,
+            top_k=top_k,
+            history_length=len(conversation_history),
+            enable_query_rewrite=enable_query_rewrite,
+            enable_multi_query=enable_multi_query,
+            enable_reranking=enable_reranking,
+            enable_answer_generation=enable_answer_generation,
+        )
 
         # Conversation-context preparation (and its possible summarization
         # Gemini call) only ever runs when rewriting is actually enabled --
@@ -340,7 +464,9 @@ class RAG:
         # additional Gemini calls from conversation memory, unchanged from
         # before this existed.
         if enable_query_rewrite:
-            prepared_history = self._prepare_conversation_context(conversation_history, question)
+            prepared_history = self._prepare_conversation_context(
+                conversation_history, question, trace_id=trace_id
+            )
         else:
             prepared_history = []
 
@@ -349,9 +475,16 @@ class RAG:
                 retrieval_question = self.generator.rewrite_query(
                     question=question,
                     conversation_history=prepared_history,
+                    trace_id=trace_id,
                 )
             except GenerationUnavailableError as error:
                 logger.warning("Query rewriting unavailable, using original question: %s", error)
+                log_event(
+                    trace_id,
+                    "query_rewrite_failed",
+                    level=logging.WARNING,
+                    error=str(error),
+                )
                 retrieval_question = question
         else:
             retrieval_question = question
@@ -361,9 +494,16 @@ class RAG:
                 search_queries = self.generator.generate_queries(
                     question=retrieval_question,
                     num_queries=3,
+                    trace_id=trace_id,
                 )
             except GenerationUnavailableError as error:
                 logger.warning("Multi-query generation unavailable, using single query: %s", error)
+                log_event(
+                    trace_id,
+                    "multi_query_failed",
+                    level=logging.WARNING,
+                    error=str(error),
+                )
                 search_queries = [retrieval_question]
         else:
             search_queries = [retrieval_question]
@@ -374,11 +514,19 @@ class RAG:
             top_k=top_k,
             document_id=document_id,
             enable_reranking=enable_reranking,
+            trace_id=trace_id,
         )
 
         selected_results = retrieval["final_evidence"]
 
         if not selected_results:
+            log_event(
+                trace_id,
+                "request_completed",
+                level=logging.WARNING,
+                outcome="no_evidence",
+                total_latency_seconds=time.perf_counter() - request_start,
+            )
             return {
                 "answer": (
                     "I couldn't find enough information in the "
@@ -395,6 +543,7 @@ class RAG:
                     "final_evidence": [],
                 },
                 "error": None,
+                "trace_id": trace_id,
             }
 
         context_parts = []
@@ -428,6 +577,13 @@ class RAG:
             )
 
         if not enable_answer_generation:
+            log_event(
+                trace_id,
+                "request_completed",
+                outcome="retrieval_only",
+                evidence_count=len(sources),
+                total_latency_seconds=time.perf_counter() - request_start,
+            )
             return {
                 "answer": None,
                 "sources": sources,
@@ -441,6 +597,7 @@ class RAG:
                     "final_evidence": retrieval["final_evidence"],
                 },
                 "error": None,
+                "trace_id": trace_id,
             }
 
         context = "\n\n".join(context_parts)
@@ -465,21 +622,37 @@ Answer:
 """
 
         try:
-            answer = self.generator.generate(prompt)
+            answer = self.generator.generate(prompt, trace_id=trace_id)
             error = None
         except GenerationUnavailableError as generation_error:
             logger.warning("Answer generation unavailable: %s", generation_error)
+            log_event(
+                trace_id,
+                "answer_generation_failed",
+                level=logging.WARNING,
+                error=str(generation_error),
+            )
             answer = None
             error = {
                 "message": str(generation_error),
             }
 
-        citations = extract_citations(answer, sources)
+        citations = extract_citations(answer, sources, trace_id=trace_id)
+
+        log_event(
+            trace_id,
+            "request_completed",
+            level=logging.WARNING if error else logging.INFO,
+            outcome="generation_failed" if error else "answered",
+            evidence_count=len(sources),
+            total_latency_seconds=time.perf_counter() - request_start,
+        )
 
         return {
             "answer": answer,
             "sources": sources,
             "citations": citations,
+            "trace_id": trace_id,
             "retrieval": {
                 "original_question": question,
                 "rewritten_question": retrieval_question,

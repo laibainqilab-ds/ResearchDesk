@@ -5,9 +5,11 @@ these tests never load a real Sentence Transformers model, never touch
 ChromaDB, and never make a live Gemini call.
 """
 
+import json
 import logging
 from unittest.mock import Mock
 
+from app.models.generator import GenerationUnavailableError
 from app.rag import (
     RAG,
     RECENT_HISTORY_SIZE,
@@ -15,6 +17,19 @@ from app.rag import (
     extract_citations,
     select_relevant_history,
 )
+
+RESEARCHDESK_LOGGER = "researchdesk"
+
+
+def _log_payloads(caplog):
+    """Parse only this module's structured JSON log records, ignoring the
+    plain-text logger.warning() calls that also run alongside them (caplog
+    captures all propagating loggers, not just the one named in at_level)."""
+    return [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == RESEARCHDESK_LOGGER
+    ]
 
 
 def make_rag():
@@ -250,13 +265,13 @@ def test_answer_default_flags_match_previous_behavior():
         {"role": "assistant", "content": "earlier answer"},
     ]
 
-    rag.answer(question="follow up", conversation_history=history)
+    rag.answer(question="follow up", conversation_history=history, trace_id="fixed-trace-id")
 
     rag.generator.rewrite_query.assert_called_once_with(
-        question="follow up", conversation_history=history[-3:]
+        question="follow up", conversation_history=history[-3:], trace_id="fixed-trace-id"
     )
     rag.generator.generate_queries.assert_called_once_with(
-        question="rewritten question", num_queries=3
+        question="rewritten question", num_queries=3, trace_id="fixed-trace-id"
     )
     rag.retrieve.assert_called_once()
     assert rag.retrieve.call_args.kwargs["enable_reranking"] is True
@@ -273,10 +288,17 @@ def test_answer_query_rewrite_disabled_even_with_history():
         {"role": "assistant", "content": "earlier answer"},
     ]
 
-    rag.answer(question="follow up", conversation_history=history, enable_query_rewrite=False)
+    rag.answer(
+        question="follow up",
+        conversation_history=history,
+        enable_query_rewrite=False,
+        trace_id="fixed-trace-id",
+    )
 
     rag.generator.rewrite_query.assert_not_called()
-    rag.generator.generate_queries.assert_called_once_with(question="follow up", num_queries=3)
+    rag.generator.generate_queries.assert_called_once_with(
+        question="follow up", num_queries=3, trace_id="fixed-trace-id"
+    )
 
 
 def test_answer_multi_query_disabled_uses_single_query():
@@ -693,3 +715,191 @@ def test_citation_metadata_is_never_taken_from_generated_text():
     assert cited_source["filename"] == "real.pdf"
     assert cited_source["page_number"] == 1
     assert "fake-document.pdf" not in str(cited_source.values())
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 -- trace IDs
+# ---------------------------------------------------------------------------
+
+def test_answer_generates_a_trace_id_when_not_provided():
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.retrieve = Mock(return_value={"candidates": [], "final_evidence": []})
+
+    result = rag.answer(question="a question", conversation_history=[])
+
+    assert result["trace_id"]
+    assert len(result["trace_id"]) == 32
+
+
+def test_answer_uses_provided_trace_id_instead_of_generating_a_new_one():
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.retrieve = Mock(return_value={"candidates": [], "final_evidence": []})
+
+    result = rag.answer(
+        question="a question", conversation_history=[], trace_id="custom-trace-id"
+    )
+
+    assert result["trace_id"] == "custom-trace-id"
+
+
+def test_answer_propagates_trace_id_to_retrieve():
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.retrieve = Mock(return_value={"candidates": [], "final_evidence": []})
+
+    rag.answer(question="a question", conversation_history=[], trace_id="propagated-id")
+
+    assert rag.retrieve.call_args.kwargs["trace_id"] == "propagated-id"
+
+
+def test_answer_propagates_trace_id_to_generator_calls():
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.generator.generate.return_value = "an answer"
+    rag.reranker.rerank.return_value = [("chunk text", 0.9)]
+
+    rag.store.search.return_value = search_result([
+        ("chunk text", metadata("docA", 0), 0.2),
+    ])
+
+    rag.answer(question="a question", conversation_history=[], trace_id="gen-trace-id")
+
+    assert rag.generator.generate_queries.call_args.kwargs["trace_id"] == "gen-trace-id"
+    assert rag.generator.generate.call_args.kwargs["trace_id"] == "gen-trace-id"
+
+
+def test_retrieve_generates_a_trace_id_when_called_standalone(caplog):
+    rag = make_rag()
+    rag.store.search.return_value = search_result([
+        ("chunk-a", metadata("docA", 0), 0.2),
+    ])
+    rag.reranker.rerank.return_value = [("chunk-a", 0.9)]
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        rag.retrieve(retrieval_question="q", search_queries=["q"])
+
+    trace_ids = {payload["trace_id"] for payload in _log_payloads(caplog)}
+    assert len(trace_ids) == 1
+    assert next(iter(trace_ids))
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 -- structured logging and failure handling
+# ---------------------------------------------------------------------------
+
+def test_retrieve_logs_structured_events_for_each_stage(caplog):
+    rag = make_rag()
+    rag.store.search.return_value = search_result([
+        ("chunk-a", metadata("docA", 0), 0.2),
+    ])
+    rag.reranker.rerank.return_value = [("chunk-a", 0.9)]
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        rag.retrieve(retrieval_question="q", search_queries=["q"], trace_id="stage-trace")
+
+    payloads = _log_payloads(caplog)
+    events = {payload["event"] for payload in payloads}
+
+    assert "retrieval_started" in events
+    assert "retrieval_candidates_selected" in events
+    assert "reranking_completed" in events
+    assert "final_evidence_selected" in events
+    assert all(payload["trace_id"] == "stage-trace" for payload in payloads)
+
+
+def test_retrieve_vector_search_failure_is_logged_and_degrades_gracefully(caplog):
+    rag = make_rag()
+    rag.store.search.side_effect = RuntimeError("chroma is down")
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        result = rag.retrieve(retrieval_question="q", search_queries=["q"], trace_id="failure-trace")
+
+    # Doesn't crash -- degrades to the existing "no candidates" empty result.
+    assert result == {"candidates": [], "final_evidence": []}
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "vector_search_failed"]
+    assert len(events) == 1
+    assert events[0]["trace_id"] == "failure-trace"
+    assert "chroma is down" in events[0]["error"]
+
+
+def test_retrieve_reranking_failure_is_logged_and_falls_back_to_distance_sort(caplog):
+    rag = make_rag()
+    rag.store.search.return_value = search_result([
+        ("chunk-a", metadata("docA", 0), 0.5),
+        ("chunk-b", metadata("docB", 0), 0.1),
+    ])
+    rag.reranker.rerank.side_effect = RuntimeError("reranker model failed to load")
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        result = rag.retrieve(
+            retrieval_question="q", search_queries=["q"], trace_id="rerank-fail-trace"
+        )
+
+    # Same fallback behavior as enable_reranking=False: ascending by distance.
+    documents = [item["document"] for item in result["final_evidence"]]
+    assert documents == ["chunk-b", "chunk-a"]
+    assert all(item["rerank_score"] is None for item in result["final_evidence"])
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "reranking_failed"]
+    assert len(events) == 1
+    assert "reranker model failed to load" in events[0]["error"]
+
+
+def test_retrieve_empty_result_is_logged_as_warning(caplog):
+    rag = make_rag()
+    rag.store.search.return_value = search_result([])
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        rag.retrieve(retrieval_question="q", search_queries=["q"], trace_id="empty-trace")
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "retrieval_empty"]
+    assert len(events) == 1
+    assert events[0]["level"] == "WARNING"
+
+
+def test_answer_generation_failure_is_logged(caplog):
+    rag = make_rag()
+    rag.generator.generate_queries.return_value = ["q"]
+    rag.reranker.rerank.return_value = [("chunk text", 0.9)]
+    rag.store.search.return_value = search_result([
+        ("chunk text", metadata("docA", 0), 0.2),
+    ])
+    rag.generator.generate.side_effect = GenerationUnavailableError("Gemini is down")
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        result = rag.answer(
+            question="a question", conversation_history=[], trace_id="gen-fail-trace"
+        )
+
+    assert result["answer"] is None
+    assert result["error"]["message"] == "Gemini is down"
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "answer_generation_failed"]
+    assert len(events) == 1
+    assert events[0]["trace_id"] == "gen-fail-trace"
+
+
+def test_citation_validation_logs_invalid_citations_as_warning(caplog):
+    sources = _sample_sources()
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        extract_citations("This cites a bad source [9].", sources, trace_id="citation-trace")
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "citation_validation_completed"]
+    assert len(events) == 1
+    assert events[0]["level"] == "WARNING"
+    assert events[0]["invalid_citations"] == [9]
+
+
+def test_citation_validation_logs_info_when_all_valid(caplog):
+    sources = _sample_sources()
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        extract_citations("This cites a good source [1].", sources, trace_id="citation-ok-trace")
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "citation_validation_completed"]
+    assert len(events) == 1
+    assert events[0]["level"] == "INFO"

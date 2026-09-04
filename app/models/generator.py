@@ -1,10 +1,13 @@
 import logging
 import os
+import time
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types as genai_types
+
+from app.observability import log_event
 
 
 load_dotenv()
@@ -47,7 +50,16 @@ class Generator:
             ),
         )
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, trace_id: str | None = None) -> str:
+        start = time.perf_counter()
+
+        log_event(
+            trace_id,
+            "gemini_call_started",
+            model=self.model_name,
+            prompt_length=len(prompt),
+        )
+
         try:
             response = self.client.models.generate_content(
                 model=self.model_name,
@@ -59,6 +71,15 @@ class Generator:
                 error.code,
                 error,
             )
+            log_event(
+                trace_id,
+                "gemini_call_failed",
+                level=logging.WARNING,
+                model=self.model_name,
+                error_code=error.code,
+                error=str(error),
+                latency_seconds=time.perf_counter() - start,
+            )
             raise GenerationUnavailableError(
                 f"The answer-generation service returned an error "
                 f"(code {error.code}) and could not generate an answer.",
@@ -69,6 +90,14 @@ class Generator:
             # errors from the underlying HTTP client that aren't raised as
             # genai_errors.APIError.
             logger.warning("Gemini generation request failed: %s", error)
+            log_event(
+                trace_id,
+                "gemini_call_failed",
+                level=logging.WARNING,
+                model=self.model_name,
+                error=str(error),
+                latency_seconds=time.perf_counter() - start,
+            )
             raise GenerationUnavailableError(
                 "The answer-generation service is temporarily unreachable. "
                 "Please check the connection and try again.",
@@ -79,10 +108,26 @@ class Generator:
 
         if not isinstance(text, str) or not text.strip():
             logger.warning("Gemini response contained no usable text: %r", response)
+            log_event(
+                trace_id,
+                "gemini_call_failed",
+                level=logging.WARNING,
+                model=self.model_name,
+                error="empty_or_malformed_response",
+                latency_seconds=time.perf_counter() - start,
+            )
             raise GenerationUnavailableError(
                 "The answer-generation service returned an unexpected response format.",
                 original=None,
             )
+
+        log_event(
+            trace_id,
+            "gemini_call_succeeded",
+            model=self.model_name,
+            response_length=len(text),
+            latency_seconds=time.perf_counter() - start,
+        )
 
         return text.strip()
 
@@ -90,6 +135,7 @@ class Generator:
         self,
         question: str,
         conversation_history: list[dict],
+        trace_id: str | None = None,
     ) -> str:
         if not conversation_history:
             return question
@@ -102,6 +148,8 @@ class Generator:
             f"{message['role']}: {message['content']}"
             for message in conversation_history
         )
+
+        log_event(trace_id, "query_rewrite_requested", history_length=len(conversation_history))
 
         prompt = f"""
 Rewrite the user's current question into a standalone search query.
@@ -128,13 +176,16 @@ Current question:
 Standalone search query:
 """
 
-        return self.generate(prompt).strip()
+        return self.generate(prompt, trace_id=trace_id).strip()
 
     def generate_queries(
         self,
         question: str,
         num_queries: int = 3,
+        trace_id: str | None = None,
     ) -> list[str]:
+        log_event(trace_id, "multi_query_requested", requested_count=num_queries)
+
         prompt = f"""
 Generate {num_queries} different search queries for the user's question.
 
@@ -155,7 +206,7 @@ Question:
 Search queries:
 """
 
-        response = self.generate(prompt).strip()
+        response = self.generate(prompt, trace_id=trace_id).strip()
 
         queries = [
             line.strip()
@@ -163,9 +214,13 @@ Search queries:
             if line.strip()
         ]
 
-        return queries[:num_queries]
+        queries = queries[:num_queries]
 
-    def summarize_conversation(self, messages: list[dict]) -> str:
+        log_event(trace_id, "multi_query_generated", generated_count=len(queries))
+
+        return queries
+
+    def summarize_conversation(self, messages: list[dict], trace_id: str | None = None) -> str:
         if not messages:
             return ""
 
@@ -173,6 +228,8 @@ Search queries:
             f"{message['role']}: {message['content']}"
             for message in messages
         )
+
+        log_event(trace_id, "conversation_summarization_requested", message_count=len(messages))
 
         prompt = f"""
 Summarize the following earlier conversation in 2-3 sentences, preserving
@@ -188,4 +245,4 @@ Conversation:
 Summary:
 """
 
-        return self.generate(prompt).strip()
+        return self.generate(prompt, trace_id=trace_id).strip()

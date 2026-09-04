@@ -175,6 +175,7 @@ def run_question(
         "run_error": run_error,
         "total_latency_seconds": total_latency_seconds,
         "model_name": rag.generator.model_name,
+        "trace_id": result.get("trace_id"),
     }
 
 

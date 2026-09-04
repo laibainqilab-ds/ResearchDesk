@@ -11,6 +11,7 @@ from app.ingestion.pipeline import (
     ingest_file,
 )
 from app.models.generator import GenerationUnavailableError
+from app.observability import new_trace_id
 from app.rag import RAG
 from evaluation import report as evaluation_report
 
@@ -151,9 +152,18 @@ def render_sources(sources: list[dict]) -> None:
             )
 
 
-def render_generation_error_message(error: dict) -> str:
-    """Compose a clean, honest user-facing message from the backend's structured error."""
-    return f"Retrieval completed successfully, but answer generation failed: {error['message']}"
+def render_generation_error_message(error: dict, trace_id: str | None = None) -> str:
+    """Compose a clean, honest user-facing message from the backend's structured error.
+
+    Includes the trace ID (when available) so a user-visible failure can be
+    correlated with its detailed entry in logs/researchdesk.jsonl.
+    """
+    message = f"Retrieval completed successfully, but answer generation failed: {error['message']}"
+
+    if trace_id:
+        message += f" (trace ID: {trace_id})"
+
+    return message
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +260,11 @@ if page == "Chat":
                 with st.expander(f"Sources ({len(sources)})"):
                     render_sources(sources)
 
+            trace_id = message.get("trace_id")
+
+            if message["role"] == "assistant" and trace_id:
+                st.caption(f"trace ID: {trace_id}")
+
     question = st.chat_input(
         "Ask a question about your documents",
         disabled=bool(st.session_state.rag_error),
@@ -271,14 +286,19 @@ if page == "Chat":
                 conversation_history=conversation_history,
             )
 
-        st.session_state.last_retrieval = result.get("retrieval")
+        trace_id = result.get("trace_id")
+
+        last_retrieval = result.get("retrieval")
+        if last_retrieval is not None:
+            last_retrieval = {**last_retrieval, "trace_id": trace_id}
+        st.session_state.last_retrieval = last_retrieval
         st.session_state.last_retrieval_source = "Chat"
 
         error = result.get("error")
         st.session_state.last_generation_error = error
 
         if error is not None:
-            content = render_generation_error_message(error)
+            content = render_generation_error_message(error, trace_id)
             is_error = True
         else:
             content = result["answer"]
@@ -290,6 +310,7 @@ if page == "Chat":
                 "content": content,
                 "sources": result["sources"],
                 "is_error": is_error,
+                "trace_id": trace_id,
             }
         )
 
@@ -466,11 +487,14 @@ elif page == "Retrieval Inspector":
             elif st.session_state.rag is None:
                 st.warning("ResearchDesk could not initialize the retrieval pipeline.")
             else:
+                inspector_trace_id = new_trace_id()
+
                 with st.spinner("Generating search queries..."):
                     try:
                         search_queries = st.session_state.rag.generator.generate_queries(
                             question=inspector_question,
                             num_queries=3,
+                            trace_id=inspector_trace_id,
                         )
                     except GenerationUnavailableError:
                         search_queries = []
@@ -483,6 +507,7 @@ elif page == "Retrieval Inspector":
                         retrieval_question=inspector_question,
                         search_queries=search_queries,
                         top_k=3,
+                        trace_id=inspector_trace_id,
                     )
 
                 st.session_state.last_retrieval = {
@@ -491,6 +516,7 @@ elif page == "Retrieval Inspector":
                     "search_queries": search_queries,
                     "candidates": retrieval["candidates"],
                     "final_evidence": retrieval["final_evidence"],
+                    "trace_id": inspector_trace_id,
                 }
                 st.session_state.last_retrieval_source = "Manual test"
 
@@ -506,6 +532,9 @@ elif page == "Retrieval Inspector":
     else:
         st.divider()
         st.caption(f"Showing retrieval from: {st.session_state.last_retrieval_source}")
+
+        if retrieval.get("trace_id"):
+            st.caption(f"trace ID: {retrieval['trace_id']}")
 
         question_col, rewritten_col = st.columns(2)
 
