@@ -1,7 +1,8 @@
-google-genai
 python-dotenv
 sentence-transformers
 chromadb
 streamlit
-pypdf
+pymupdf
 scikit-learn
+pytest
+google-genai

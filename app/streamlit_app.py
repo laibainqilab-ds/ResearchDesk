@@ -1,7 +1,21 @@
+import json
+from pathlib import Path
+
 import streamlit as st
 
+from app.ingestion.parsers import UnsupportedFileTypeError, file_type_for
+from app.ingestion.pipeline import (
+    DocumentParsingError,
+    DuplicateDocumentError,
+    EmptyDocumentError,
+    compute_document_id,
+    ingest_file,
+)
 from app.models.generator import GenerationUnavailableError
 from app.rag import RAG
+
+
+DOCUMENTS_DIR = Path("data/documents")
 
 
 st.set_page_config(
@@ -288,19 +302,103 @@ if page == "Chat":
 
 elif page == "Documents":
     st.header("Documents")
-    st.caption("Documents currently indexed in the vector store.")
+    st.caption("Upload PDF, TXT, or Markdown documents and manage what's indexed.")
 
     if st.session_state.rag is None:
         st.warning("ResearchDesk could not initialize the vector store.")
     else:
+        st.subheader("Upload documents")
+
+        uploaded_files = st.file_uploader(
+            "Upload PDF, TXT, or Markdown files",
+            type=["pdf", "txt", "md"],
+            accept_multiple_files=True,
+        )
+
+        if uploaded_files and st.button("Ingest uploaded files", type="primary"):
+            DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+            for uploaded_file in uploaded_files:
+                save_path = None
+
+                with st.status(
+                    f"Processing {uploaded_file.name}...", expanded=True
+                ) as status:
+                    try:
+                        file_type_for(uploaded_file.name)
+                        st.write("Validating file type ✓")
+
+                        file_bytes = uploaded_file.getvalue()
+                        document_id = compute_document_id(file_bytes)
+                        save_path = DOCUMENTS_DIR / f"{document_id[:16]}_{uploaded_file.name}"
+                        save_path.write_bytes(file_bytes)
+
+                        st.write("Parsing and chunking...")
+
+                        result = ingest_file(
+                            file_path=str(save_path),
+                            filename=uploaded_file.name,
+                            store=st.session_state.rag.store,
+                            embedder=st.session_state.rag.embedder,
+                        )
+
+                        st.write("Embedding and storing ✓")
+
+                        pages_note = (
+                            f", {result['page_count']} pages"
+                            if result["page_count"]
+                            else ""
+                        )
+                        status.update(
+                            label=(
+                                f"{uploaded_file.name} — indexed "
+                                f"({result['chunk_count']} chunks{pages_note})"
+                            ),
+                            state="complete",
+                        )
+                    except UnsupportedFileTypeError as error:
+                        status.update(
+                            label=f"{uploaded_file.name} — unsupported file type",
+                            state="error",
+                        )
+                        st.error(str(error))
+                    except DuplicateDocumentError as error:
+                        if save_path is not None:
+                            save_path.unlink(missing_ok=True)
+                        status.update(
+                            label=f"{uploaded_file.name} — already indexed",
+                            state="complete",
+                        )
+                        st.info(str(error))
+                    except EmptyDocumentError as error:
+                        if save_path is not None:
+                            save_path.unlink(missing_ok=True)
+                        status.update(
+                            label=f"{uploaded_file.name} — empty document",
+                            state="error",
+                        )
+                        st.error(str(error))
+                    except DocumentParsingError as error:
+                        if save_path is not None:
+                            save_path.unlink(missing_ok=True)
+                        status.update(
+                            label=f"{uploaded_file.name} — failed to process",
+                            state="error",
+                        )
+                        st.error(str(error))
+
+            st.rerun()
+
+        st.divider()
+        st.subheader("Indexed documents")
+
         documents = st.session_state.rag.store.list_documents()
 
         if not documents:
             with st.container(border=True):
                 st.markdown("#### No documents indexed yet")
                 st.write(
-                    "Documents will appear here once they have been ingested "
-                    "into the vector store."
+                    "Upload a PDF, TXT, or Markdown file above to get started."
                 )
         else:
             column1, column2 = st.columns(2)
@@ -309,17 +407,33 @@ elif page == "Documents":
 
             st.divider()
 
-            grid_columns = st.columns(3)
+            for document in documents:
+                with st.container(border=True):
+                    info_col, action_col = st.columns([4, 1])
 
-            for index, document in enumerate(documents):
-                with grid_columns[index % 3]:
-                    with st.container(border=True):
+                    with info_col:
                         st.markdown(f"**{document.get('filename') or 'Unknown file'}**")
-                        st.caption(f"Document ID: {document['document_id']}")
-                        st.caption(f"{document['chunk_count']} chunks indexed")
 
-    st.divider()
-    st.caption("Document upload and management will be added in a later phase.")
+                        page_note = (
+                            f"{document['page_count']} pages · "
+                            if document.get("page_count")
+                            else ""
+                        )
+                        st.caption(
+                            f"{document.get('file_type') or 'UNKNOWN'} · "
+                            f"{page_note}{document['chunk_count']} chunks"
+                        )
+                        st.caption(f"Document ID: {document['document_id'][:16]}...")
+
+                    with action_col:
+                        if st.button(
+                            "Delete",
+                            key=f"delete_{document['document_id']}",
+                        ):
+                            st.session_state.rag.store.delete_document(
+                                document["document_id"]
+                            )
+                            st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -476,12 +590,108 @@ elif page == "Retrieval Inspector":
 
 elif page == "Evaluation":
     st.header("Evaluation")
-    st.caption("Automated quality measurement for retrieval and answers.")
+    st.caption("Results from the most recently generated Phase 5 evaluation report.")
 
-    with st.container(border=True):
-        st.markdown("#### Coming in a future phase")
-        st.write(
-            "Evaluation is not implemented yet. A future phase will add "
-            "automated measurement of retrieval and answer quality. No "
-            "evaluation metrics are available in this version."
+    report_path = Path("evaluation/rag_report.json")
+
+    if not report_path.exists():
+        with st.container(border=True):
+            st.markdown("#### No evaluation report yet")
+            st.write(
+                "This page displays the results of the last evaluation run. "
+                "No report has been generated yet. Run the following from the "
+                "project root, then reload this page:"
+            )
+            st.code(
+                "python -m evaluation.run_evaluation\n"
+                "python -m evaluation.report",
+                language="powershell",
+            )
+    else:
+        eval_report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        st.caption(f"Experiment: {eval_report.get('experiment', 'n/a')}")
+
+        st.subheader("Dataset")
+        dataset_info = eval_report["dataset"]
+
+        column1, column2, column3 = st.columns(3)
+        column1.metric("Total questions", dataset_info["total_questions"])
+        column2.metric("Answerable", dataset_info["answerable_questions"])
+        column3.metric("Unanswerable", dataset_info["unanswerable_questions"])
+
+        st.write("**By category:**", dataset_info["by_category"])
+        st.write("**Documents represented:**", ", ".join(dataset_info["documents_represented"]) or "none")
+
+        st.divider()
+        st.subheader("Retrieval metrics")
+        st.caption(
+            f"Computed over {eval_report['retrieval']['questions_evaluated']} answerable "
+            "questions with known supporting sources."
         )
+
+        retrieval_metrics = {
+            key: value for key, value in eval_report["retrieval"].items()
+            if key != "questions_evaluated"
+        }
+        metric_columns = st.columns(len(retrieval_metrics) or 1)
+
+        for column, (metric_name, value) in zip(metric_columns, retrieval_metrics.items()):
+            column.metric(metric_name, format_score(value))
+
+        st.divider()
+        st.subheader("Answer metrics")
+
+        answer_col, faithfulness_col, citation_col = st.columns(3)
+
+        with answer_col:
+            st.markdown("**Correctness**")
+            st.write(eval_report["answers"]["correctness_counts"])
+
+        with faithfulness_col:
+            st.markdown("**Faithfulness**")
+            st.write(eval_report["answers"]["faithfulness_counts"])
+
+        with citation_col:
+            st.markdown("**Citations**")
+            st.write(eval_report["answers"]["citation_counts"])
+
+        st.divider()
+        st.subheader("Abstention")
+        abstention_info = eval_report["abstention"]
+
+        abstain_col1, abstain_col2, abstain_col3, abstain_col4 = st.columns(4)
+        abstain_col1.metric("Correct abstentions", abstention_info["correct_abstentions"])
+        abstain_col2.metric("Missed abstentions", abstention_info["missed_abstentions"])
+        abstain_col3.metric("Unexpected abstentions", abstention_info["unexpected_abstentions"])
+        abstention_accuracy = abstention_info["abstention_accuracy"]
+        abstain_col4.metric(
+            "Abstention accuracy",
+            f"{abstention_accuracy:.0%}" if abstention_accuracy is not None else "N/A",
+        )
+
+        st.divider()
+        st.subheader("Performance")
+        performance_info = eval_report["performance"]
+
+        perf_col1, perf_col2, perf_col3 = st.columns(3)
+        avg_latency = performance_info["average_latency_seconds"]
+        median_latency = performance_info["median_latency_seconds"]
+        perf_col1.metric("Avg latency", f"{avg_latency:.2f}s" if avg_latency is not None else "N/A")
+        perf_col2.metric("Median latency", f"{median_latency:.2f}s" if median_latency is not None else "N/A")
+        perf_col3.metric("Model(s)", ", ".join(performance_info["model_names_used"]) or "n/a")
+
+        st.caption(
+            f"Token usage: {performance_info['token_usage']}. "
+            f"{performance_info['unavailable_metrics_reason']}"
+        )
+
+        st.divider()
+        st.subheader(f"Failed questions ({len(eval_report['failures'])})")
+
+        if not eval_report["failures"]:
+            st.success("No failures recorded in the last run.")
+        else:
+            for failure in eval_report["failures"]:
+                with st.expander(f"{failure['id']} [{failure['category']}] — {failure['question']}"):
+                    st.write("Reasons:", ", ".join(failure["reasons"]))

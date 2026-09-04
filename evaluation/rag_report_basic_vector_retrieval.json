@@ -1,0 +1,538 @@
+{
+  "experiment": "basic_vector_retrieval",
+  "evaluation_top_k": 5,
+  "dataset": {
+    "total_questions": 60,
+    "by_category": {
+      "direct": 19,
+      "multi_chunk": 10,
+      "multi_document": 5,
+      "multi_hop": 8,
+      "ambiguous": 5,
+      "follow_up": 3,
+      "unanswerable": 10
+    },
+    "answerable_questions": 50,
+    "unanswerable_questions": 10,
+    "documents_represented": [
+      "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+      "SCRIPT FOR DISCOVERY.pdf"
+    ]
+  },
+  "retrieval": {
+    "recall_at_3": 0.33666666666666667,
+    "precision_at_3": 0.25555555555555554,
+    "hit_rate_at_3": 0.4,
+    "recall_at_5": 0.43666666666666665,
+    "precision_at_5": 0.23333333333333334,
+    "hit_rate_at_5": 0.48,
+    "mrr": 0.3253015873015873,
+    "questions_evaluated": 50
+  },
+  "answers": {
+    "correctness_counts": {
+      "correct": 11,
+      "partial": 2,
+      "incorrect": 37,
+      "unscored": 0
+    },
+    "faithfulness_counts": {
+      "grounded": 12,
+      "unsupported": 1,
+      "unscored": 37
+    },
+    "citation_counts": {
+      "correct": 24,
+      "incorrect": 6,
+      "no_citations": 20,
+      "not_applicable": 0
+    }
+  },
+  "abstention": {
+    "expected_abstentions": 10,
+    "correct_abstentions": 10,
+    "missed_abstentions": 0,
+    "unexpected_abstentions": 34,
+    "correct_answers": 16,
+    "abstention_accuracy": 1.0
+  },
+  "performance": {
+    "average_latency_seconds": 0.5826578216668471,
+    "median_latency_seconds": 0.27398610000454937,
+    "min_latency_seconds": 0.022897000002558343,
+    "max_latency_seconds": 10.822906699999294,
+    "model_names_used": [
+      "gemini-3.5-flash-lite"
+    ],
+    "retrieval_latency_seconds": null,
+    "generation_latency_seconds": null,
+    "token_usage": null,
+    "unavailable_metrics_reason": "RAG.answer() performs query rewriting, multi-query generation, retrieval, and final generation as one call with no internal timing hooks exposed, so only total per-question latency can be measured without modifying app/rag.py (out of scope for this task). Token usage is unavailable because Generator.generate() in app/models/generator.py only returns the response text -- Ollama's /api/generate response does include eval_count/prompt_eval_count fields, but capturing them would require changing the Generator return interface, which risks changing LLM generation behavior and was out of scope here."
+  },
+  "failures": [
+    {
+      "id": "q001",
+      "category": "direct",
+      "question": "What is the full title of the paper the talk is based on?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service is temporarily unreachable. Please check the connection and try again.",
+        "unexpected_abstention",
+        "incorrect_answer",
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q004",
+      "category": "direct",
+      "question": "About how many times has the cost of reading out DNA dropped since 2007?",
+      "reasons": [
+        "unsupported_claim"
+      ]
+    },
+    {
+      "id": "q005",
+      "category": "direct",
+      "question": "What is OpenGenome2, and how many DNA letters does it contain?",
+      "reasons": [
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q009",
+      "category": "direct",
+      "question": "How many GPUs were used to train the 40-billion-parameter Evo 2 model?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q011",
+      "category": "direct",
+      "question": "What AUROC score was reached after training a small classifier on about 830,000 known DNA changes?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q015",
+      "category": "direct",
+      "question": "Which company's lead generation and outreach capabilities inspired the proposed FYDP system?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q016",
+      "category": "direct",
+      "question": "Who is the supervisor listed for the FYDP project, and what is their designation?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q017",
+      "category": "multi_chunk",
+      "question": "What are SE, MR, and LI in Evo 2's architecture, and what does each one handle?",
+      "reasons": [
+        "unexpected_abstention",
+        "incorrect_answer",
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q018",
+      "category": "multi_chunk",
+      "question": "Why can't standard/regular attention efficiently handle Evo 2's goal of a one-million-letter context window?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q019",
+      "category": "multi_chunk",
+      "question": "What training method does Evo 2 use, and what biological patterns did researchers later find it had learned as a side effect?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q020",
+      "category": "multi_chunk",
+      "question": "What are Evo 2's two major capabilities, and how does the DNA-generation capability actually work?",
+      "reasons": [
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q022",
+      "category": "multi_chunk",
+      "question": "The talk notes that Evo 2's performance varies by gene or mutation type in more than one place. Where does this point come up?",
+      "reasons": [
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q023",
+      "category": "multi_chunk",
+      "question": "What problem does 'representation learning' solve, and how does Evo 2's actual training approach implement that idea?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q025",
+      "category": "multi_chunk",
+      "question": "What does the FYDP proposal say about the technologies used for the voice-based client interaction feature?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q026",
+      "category": "multi_chunk",
+      "question": "What does the FYDP proposal say about the system's role relative to human staff?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q027",
+      "category": "multi_document",
+      "question": "How many documents are currently indexed in ResearchDesk, and what is each one about?",
+      "reasons": [
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q028",
+      "category": "multi_document",
+      "question": "Both documents describe a system built around a model trained on sequential data. Name each system and what kind of sequence each one processes.",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q029",
+      "category": "multi_document",
+      "question": "Which of the two documents discusses large-scale GPU training, and which one discusses a Gantt chart and project team? Give the specific numbers/names involved.",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q030",
+      "category": "multi_document",
+      "question": "Do either of the two documents mention large language models being used as part of a system, and if so, how is the LLM used in each case?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q031",
+      "category": "multi_document",
+      "question": "Compare the subject domains of the two documents currently in the ResearchDesk corpus.",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q032",
+      "category": "multi_hop",
+      "question": "Given that Evo 2's 40-billion-parameter model needed 1,024 GPUs and trillions of DNA letters to train, what does the talk say this implies for smaller labs?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q033",
+      "category": "multi_hop",
+      "question": "Explain how Evo 2's unlabeled next-letter-prediction training led it to learn where genes start and end, without ever being told what a gene is.",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q034",
+      "category": "multi_hop",
+      "question": "The talk argues regular attention doesn't scale to a million-letter context, yet Evo 2 still uses some attention. How does the model resolve this?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q035",
+      "category": "multi_hop",
+      "question": "Based on the two-stage training process, explain why Evo 2 was not trained on million-letter sequences from the very first training step.",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q036",
+      "category": "multi_hop",
+      "question": "Evo 2 scored 0.95 AUROC zero-shot on BRCA1 and a follow-up study reached 0.997 using about 830,000 labeled examples. What does this progression suggest?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q037",
+      "category": "multi_hop",
+      "question": "The document mentions Evo 1 and DNABERT as earlier models. Based on the talk, what problem did Evo 2 specifically aim to solve that they didn't?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q038",
+      "category": "multi_hop",
+      "question": "The FYDP proposal says the system should assist humans rather than independently finalize projects, but also describes AI scoring with only 'optional' manual verification. What does this imply about the AI scoring step's autonomy?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q039",
+      "category": "multi_hop",
+      "question": "Based on the Gantt chart's task ordering, which capability is scheduled after lead scoring but before the dashboard, and what does that imply about development priority?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q040",
+      "category": "ambiguous",
+      "question": "What does 'context' mean in this talk?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer",
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q041",
+      "category": "ambiguous",
+      "question": "What does 'the model' refer to when the talk says it 'looked inside its internal workings' and found gene boundaries?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer",
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q042",
+      "category": "ambiguous",
+      "question": "Is Evo 2 a foundation model?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q043",
+      "category": "ambiguous",
+      "question": "What does 'the system' assist with in the FYDP proposal?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q044",
+      "category": "ambiguous",
+      "question": "Who are 'the researchers' being referred to across the talk?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer",
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q045a",
+      "category": "direct",
+      "question": "What two parameter sizes was Evo 2 built in?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q045b",
+      "category": "follow_up",
+      "question": "How many GPUs were used to train the larger one?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q046a",
+      "category": "direct",
+      "question": "What score did Evo 2 achieve on BRCA1 mutation classification with no extra training?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q046b",
+      "category": "follow_up",
+      "question": "What did that score become after the follow-up study with more labeled data?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q047a",
+      "category": "direct",
+      "question": "What is the title of the FYDP project described in the second document?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer.",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q047b",
+      "category": "follow_up",
+      "question": "Who supervises it?",
+      "reasons": [
+        "run_error: 'document_id'",
+        "unexpected_abstention",
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q048",
+      "category": "unanswerable",
+      "question": "What is the capital of France?",
+      "reasons": [
+        "run_error: 'document_id'"
+      ]
+    },
+    {
+      "id": "q049",
+      "category": "unanswerable",
+      "question": "Who is the current CEO of NVIDIA?",
+      "reasons": [
+        "run_error: 'document_id'"
+      ]
+    },
+    {
+      "id": "q050",
+      "category": "unanswerable",
+      "question": "What is the exact accuracy of Evo 2 on every possible human genetic mutation?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer."
+      ]
+    },
+    {
+      "id": "q051",
+      "category": "unanswerable",
+      "question": "Is the FYDP project's frontend written in TypeScript or plain JavaScript?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer."
+      ]
+    },
+    {
+      "id": "q052",
+      "category": "unanswerable",
+      "question": "What is the total budget allocated for the FYDP project?",
+      "reasons": [
+        "run_error: 'document_id'"
+      ]
+    },
+    {
+      "id": "q053",
+      "category": "unanswerable",
+      "question": "How does Evo 2's benchmark accuracy compare to AlphaFold?",
+      "reasons": [
+        "run_error: 'document_id'"
+      ]
+    },
+    {
+      "id": "q054",
+      "category": "unanswerable",
+      "question": "What grade or evaluation score did the FYDP proposal receive from the steering committee?",
+      "reasons": [
+        "run_error: 'document_id'"
+      ]
+    },
+    {
+      "id": "q055",
+      "category": "unanswerable",
+      "question": "Which cloud provider (AWS, Azure, or GCP) does the FYDP project plan to deploy on?",
+      "reasons": [
+        "run_error: 'document_id'"
+      ]
+    },
+    {
+      "id": "q056",
+      "category": "unanswerable",
+      "question": "What is Evo 2's measured performance on RNA structure prediction?",
+      "reasons": [
+        "generation_unavailable: The answer-generation service returned an error (code 429) and could not generate an answer."
+      ]
+    },
+    {
+      "id": "q057",
+      "category": "unanswerable",
+      "question": "Does either document in the corpus mention quantum computing?",
+      "reasons": [
+        "run_error: 'document_id'"
+      ]
+    }
+  ]
+}

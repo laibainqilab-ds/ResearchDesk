@@ -8,6 +8,7 @@ def chunk_pages(
     file_type: str = "PDF",
     chunk_size: int = 500,
     overlap: int = 50,
+    source: str | None = None,
 ) -> list[DocumentChunk]:
     chunks = []
     chunk_id = 0
@@ -33,6 +34,7 @@ def chunk_pages(
                     chunk_id=chunk_id,
                     text=chunk_text,
                     page_number=page["page_number"],
+                    source=source,
                 )
             )
 

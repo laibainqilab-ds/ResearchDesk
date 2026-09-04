@@ -1,0 +1,189 @@
+{
+  "experiment": "final_pipeline",
+  "evaluation_top_k": 5,
+  "dataset": {
+    "total_questions": 60,
+    "by_category": {
+      "direct": 19,
+      "multi_chunk": 10,
+      "multi_document": 5,
+      "multi_hop": 8,
+      "ambiguous": 5,
+      "follow_up": 3,
+      "unanswerable": 10
+    },
+    "answerable_questions": 50,
+    "unanswerable_questions": 10,
+    "documents_represented": [
+      "1-FYDP-Proposal-Form_0 (1)-1.pdf",
+      "SCRIPT FOR DISCOVERY.pdf"
+    ]
+  },
+  "retrieval": {
+    "recall_at_3": 0.8666666666666667,
+    "precision_at_3": 0.4066666666666666,
+    "hit_rate_at_3": 0.94,
+    "recall_at_5": 0.91,
+    "precision_at_5": 0.272,
+    "hit_rate_at_5": 0.96,
+    "mrr": 0.8628333333333333,
+    "questions_evaluated": 50
+  },
+  "answers": {
+    "correctness_counts": {
+      "correct": 29,
+      "partial": 15,
+      "incorrect": 6,
+      "unscored": 0
+    },
+    "faithfulness_counts": {
+      "grounded": 42,
+      "unsupported": 2,
+      "unscored": 6
+    },
+    "citation_counts": {
+      "correct": 48,
+      "incorrect": 2,
+      "no_citations": 0,
+      "not_applicable": 0
+    }
+  },
+  "abstention": {
+    "expected_abstentions": 10,
+    "correct_abstentions": 4,
+    "missed_abstentions": 6,
+    "unexpected_abstentions": 1,
+    "correct_answers": 49,
+    "abstention_accuracy": 0.4
+  },
+  "performance": {
+    "average_latency_seconds": 35.97669315666766,
+    "median_latency_seconds": 34.39542774999791,
+    "min_latency_seconds": 18.488132000005862,
+    "max_latency_seconds": 75.61802629999875,
+    "model_names_used": [
+      "gemini-3.5-flash-lite"
+    ],
+    "retrieval_latency_seconds": null,
+    "generation_latency_seconds": null,
+    "token_usage": null,
+    "unavailable_metrics_reason": "RAG.answer() performs query rewriting, multi-query generation, retrieval, and final generation as one call with no internal timing hooks exposed, so only total per-question latency can be measured without modifying app/rag.py (out of scope for this task). Token usage is unavailable because Generator.generate() in app/models/generator.py only returns the response text -- Ollama's /api/generate response does include eval_count/prompt_eval_count fields, but capturing them would require changing the Generator return interface, which risks changing LLM generation behavior and was out of scope here."
+  },
+  "failures": [
+    {
+      "id": "q014",
+      "category": "direct",
+      "question": "What is the title of the Final Year Design Project proposed in the second document?",
+      "reasons": [
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q020",
+      "category": "multi_chunk",
+      "question": "What are Evo 2's two major capabilities, and how does the DNA-generation capability actually work?",
+      "reasons": [
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q022",
+      "category": "multi_chunk",
+      "question": "The talk notes that Evo 2's performance varies by gene or mutation type in more than one place. Where does this point come up?",
+      "reasons": [
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q023",
+      "category": "multi_chunk",
+      "question": "What problem does 'representation learning' solve, and how does Evo 2's actual training approach implement that idea?",
+      "reasons": [
+        "unsupported_claim"
+      ]
+    },
+    {
+      "id": "q027",
+      "category": "multi_document",
+      "question": "How many documents are currently indexed in ResearchDesk, and what is each one about?",
+      "reasons": [
+        "unexpected_abstention",
+        "incorrect_answer",
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q028",
+      "category": "multi_document",
+      "question": "Both documents describe a system built around a model trained on sequential data. Name each system and what kind of sequence each one processes.",
+      "reasons": [
+        "unsupported_claim"
+      ]
+    },
+    {
+      "id": "q031",
+      "category": "multi_document",
+      "question": "Compare the subject domains of the two documents currently in the ResearchDesk corpus.",
+      "reasons": [
+        "incorrect_answer"
+      ]
+    },
+    {
+      "id": "q040",
+      "category": "ambiguous",
+      "question": "What does 'context' mean in this talk?",
+      "reasons": [
+        "incorrect_answer",
+        "incorrect_citation"
+      ]
+    },
+    {
+      "id": "q049",
+      "category": "unanswerable",
+      "question": "Who is the current CEO of NVIDIA?",
+      "reasons": [
+        "missed_abstention"
+      ]
+    },
+    {
+      "id": "q050",
+      "category": "unanswerable",
+      "question": "What is the exact accuracy of Evo 2 on every possible human genetic mutation?",
+      "reasons": [
+        "missed_abstention"
+      ]
+    },
+    {
+      "id": "q054",
+      "category": "unanswerable",
+      "question": "What grade or evaluation score did the FYDP proposal receive from the steering committee?",
+      "reasons": [
+        "missed_abstention"
+      ]
+    },
+    {
+      "id": "q055",
+      "category": "unanswerable",
+      "question": "Which cloud provider (AWS, Azure, or GCP) does the FYDP project plan to deploy on?",
+      "reasons": [
+        "missed_abstention"
+      ]
+    },
+    {
+      "id": "q056",
+      "category": "unanswerable",
+      "question": "What is Evo 2's measured performance on RNA structure prediction?",
+      "reasons": [
+        "missed_abstention"
+      ]
+    },
+    {
+      "id": "q057",
+      "category": "unanswerable",
+      "question": "Does either document in the corpus mention quantum computing?",
+      "reasons": [
+        "missed_abstention"
+      ]
+    }
+  ]
+}

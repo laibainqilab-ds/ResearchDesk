@@ -9,3 +9,4 @@ class DocumentChunk(BaseModel):
     chunk_id: int
     text: str
     page_number: Optional[int] = None
+    source: Optional[str] = None
