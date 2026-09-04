@@ -20,6 +20,9 @@ data/processed/
 data/chroma/
 data/documents/
 
+# Local observability logs
+logs/
+
 # IDE
 .vscode/
 

@@ -1,3 +1,6 @@
+import json
+import logging
+
 import pytest
 
 from app.ingestion.parsers import UnsupportedFileTypeError
@@ -9,6 +12,16 @@ from app.ingestion.pipeline import (
 )
 from app.ingestion.vector_store import VectorStore
 
+RESEARCHDESK_LOGGER = "researchdesk"
+
+
+def _log_payloads(caplog):
+    return [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == RESEARCHDESK_LOGGER
+    ]
+
 
 class FakeEmbedder:
     """Deterministic stand-in for the real Sentence Transformers embedder so
@@ -16,6 +29,13 @@ class FakeEmbedder:
 
     def embed(self, texts):
         return [[float(len(text) % 7), 0.0, 1.0] for text in texts]
+
+
+class FailingEmbedder:
+    """Raises during embed() to exercise the ingestion embedding-failure path."""
+
+    def embed(self, texts):
+        raise RuntimeError("embedding backend unavailable")
 
 
 @pytest.fixture
@@ -190,3 +210,81 @@ def test_txt_metadata_has_no_page_number_key(tmp_path, store, embedder):
     assert "page_number" not in metadata
     assert metadata["file_type"] == "TXT"
     assert metadata["source"] == str(file_path)
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 -- structured logging for ingestion failure paths
+#
+# Exception-raising behavior for these failure paths is already covered
+# above; these tests only check that each also produces a structured log
+# event with useful diagnostics, not the exception behavior itself.
+# ---------------------------------------------------------------------------
+
+def test_duplicate_document_rejection_is_logged(tmp_path, store, embedder, caplog):
+    file_path = tmp_path / "doc.txt"
+    file_path.write_text("Duplicate content check.", encoding="utf-8")
+
+    ingest_file(str(file_path), "doc.txt", store, embedder)
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        with pytest.raises(DuplicateDocumentError):
+            ingest_file(str(file_path), "doc.txt", store, embedder)
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "ingestion_duplicate_rejected"]
+    assert len(events) == 1
+    assert events[0]["filename"] == "doc.txt"
+
+
+def test_unsupported_file_type_is_logged(tmp_path, store, embedder, caplog):
+    file_path = tmp_path / "archive.zip"
+    file_path.write_bytes(b"not a real archive")
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        with pytest.raises(UnsupportedFileTypeError):
+            ingest_file(str(file_path), "archive.zip", store, embedder)
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "ingestion_unsupported_file_type"]
+    assert len(events) == 1
+
+
+def test_empty_document_is_logged(tmp_path, store, embedder, caplog):
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("   \n\n  ", encoding="utf-8")
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        with pytest.raises(EmptyDocumentError):
+            ingest_file(str(file_path), "empty.txt", store, embedder)
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "ingestion_empty_document"]
+    assert len(events) == 1
+
+
+def test_embedding_failure_is_logged_and_still_rolled_back(tmp_path, store, caplog):
+    file_path = tmp_path / "doc.txt"
+    file_path.write_text("Content that will fail to embed.", encoding="utf-8")
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        with pytest.raises(DocumentParsingError):
+            ingest_file(str(file_path), "doc.txt", store, FailingEmbedder())
+
+    # Existing rollback behavior preserved -- nothing left behind on failure.
+    assert store.count() == 0
+
+    events = [
+        p for p in _log_payloads(caplog) if p["event"] == "ingestion_embedding_or_storage_failed"
+    ]
+    assert len(events) == 1
+    assert "embedding backend unavailable" in events[0]["error"]
+
+
+def test_successful_ingestion_is_logged(tmp_path, store, embedder, caplog):
+    file_path = tmp_path / "notes.txt"
+    file_path.write_text("Some content for logging test.", encoding="utf-8")
+
+    with caplog.at_level(logging.INFO, logger=RESEARCHDESK_LOGGER):
+        result = ingest_file(str(file_path), "notes.txt", store, embedder)
+
+    events = [p for p in _log_payloads(caplog) if p["event"] == "ingestion_completed"]
+    assert len(events) == 1
+    assert events[0]["document_id"] == result["document_id"]
+    assert events[0]["chunk_count"] == result["chunk_count"]
