@@ -29,3 +29,5 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+evaluation/rag_results_multi_agent_quota_exhausted.json
