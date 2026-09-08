@@ -118,3 +118,102 @@ def test_list_documents_empty_when_store_empty(tmp_path):
     store = make_store(tmp_path)
 
     assert store.list_documents() == []
+
+
+def _add_two_page_document(store):
+    store.add_documents(
+        ids=["doc1_chunk_0", "doc1_chunk_1", "doc1_chunk_2"],
+        documents=["page one text", "page two text A", "page two text B"],
+        embeddings=[[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]],
+        metadatas=[
+            {
+                "document_id": "doc1",
+                "filename": "a.pdf",
+                "file_type": "PDF",
+                "chunk_id": 0,
+                "page_number": 1,
+            },
+            {
+                "document_id": "doc1",
+                "filename": "a.pdf",
+                "file_type": "PDF",
+                "chunk_id": 1,
+                "page_number": 2,
+            },
+            {
+                "document_id": "doc1",
+                "filename": "a.pdf",
+                "file_type": "PDF",
+                "chunk_id": 2,
+                "page_number": 2,
+            },
+        ],
+    )
+
+    store.add_documents(
+        ids=["doc2_chunk_0"],
+        documents=["other document, page one"],
+        embeddings=[[0.7, 0.8]],
+        metadatas=[
+            {
+                "document_id": "doc2",
+                "filename": "b.pdf",
+                "file_type": "PDF",
+                "chunk_id": 0,
+                "page_number": 1,
+            },
+        ],
+    )
+
+
+def test_get_document_chunks_returns_all_chunks_for_document(tmp_path):
+    store = make_store(tmp_path)
+    _add_two_page_document(store)
+
+    chunks = store.get_document_chunks("doc1")
+
+    assert [chunk["chunk_id"] for chunk in chunks] == [0, 1, 2]
+    assert all(chunk["document_id"] == "doc1" for chunk in chunks)
+
+
+def test_get_document_chunks_filters_by_page_number(tmp_path):
+    store = make_store(tmp_path)
+    _add_two_page_document(store)
+
+    chunks = store.get_document_chunks("doc1", page_number=2)
+
+    assert [chunk["chunk_id"] for chunk in chunks] == [1, 2]
+    assert all(chunk["page_number"] == 2 for chunk in chunks)
+
+
+def test_get_document_chunks_does_not_cross_documents(tmp_path):
+    store = make_store(tmp_path)
+    _add_two_page_document(store)
+
+    chunks = store.get_document_chunks("doc2", page_number=1)
+
+    assert len(chunks) == 1
+    assert chunks[0]["document_id"] == "doc2"
+
+
+def test_get_document_chunks_includes_text(tmp_path):
+    store = make_store(tmp_path)
+    _add_two_page_document(store)
+
+    chunks = store.get_document_chunks("doc1", page_number=1)
+
+    assert chunks[0]["document"] == "page one text"
+
+
+def test_get_document_chunks_returns_empty_for_unknown_document(tmp_path):
+    store = make_store(tmp_path)
+    _add_two_page_document(store)
+
+    assert store.get_document_chunks("doc-missing") == []
+
+
+def test_get_document_chunks_returns_empty_for_page_with_no_chunks(tmp_path):
+    store = make_store(tmp_path)
+    _add_two_page_document(store)
+
+    assert store.get_document_chunks("doc1", page_number=99) == []
