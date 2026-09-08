@@ -68,6 +68,27 @@ class VectorStore:
         records = self.collection.get(where={"document_id": document_id})
         return len(records["ids"])
 
+    def get_document_chunks(self, document_id: str, page_number: int | None = None) -> list[dict]:
+        """Exact (non-similarity) lookup of chunk records for a document,
+        optionally narrowed to one page.
+
+        Used by the agent tool layer's page-lookup tool so callers never
+        need to touch `self.collection` directly. Returned in chunk_id order.
+        """
+        if page_number is not None:
+            where = {"$and": [{"document_id": document_id}, {"page_number": page_number}]}
+        else:
+            where = {"document_id": document_id}
+
+        records = self.collection.get(where=where, include=["documents", "metadatas"])
+
+        chunks = [
+            {**metadata, "document": document}
+            for document, metadata in zip(records["documents"], records["metadatas"])
+        ]
+
+        return sorted(chunks, key=lambda chunk: chunk.get("chunk_id", 0))
+
     def delete_document(self, document_id: str) -> None:
         """Remove all chunks belonging to a single document, leaving others intact."""
         self.collection.delete(where={"document_id": document_id})

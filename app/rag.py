@@ -135,6 +135,76 @@ def extract_citations(
     return {"valid": valid, "invalid": invalid, "citation_map": citation_map}
 
 
+NO_EVIDENCE_ANSWER = (
+    "I couldn't find enough information in the "
+    "provided documents to answer this question."
+)
+
+
+def build_evidence_context(selected_results: list[dict]) -> tuple[str, list[dict]]:
+    """Format retrieved evidence into the numbered [n] context block and the
+    citation_id-tagged sources list used by the generation prompt and by
+    extract_citations().
+
+    Pure function of the evidence list -- citation_id assignment depends
+    only on evidence order, so this can be called again later (e.g. by the
+    Validation agent, to re-derive sources for citation checking) without
+    re-running retrieval or generation.
+    """
+    context_parts = []
+    sources = []
+
+    for citation_id, result in enumerate(selected_results, start=1):
+        document = result["document"]
+
+        source = result["filename"]
+        page = result["page_number"]
+        chunk_id = result["chunk_id"]
+
+        if page is not None:
+            location = f"{source} — page {page} — chunk_{chunk_id}"
+        else:
+            location = f"{source} — chunk_{chunk_id}"
+
+        context_parts.append(
+            f"[{citation_id}] {location}\n{document}"
+        )
+
+        sources.append(
+            {
+                "citation_id": citation_id,
+                "document_id": result["document_id"],
+                "filename": source,
+                "page_number": page,
+                "chunk_id": chunk_id,
+                "rerank_score": result["rerank_score"],
+            }
+        )
+
+    return "\n\n".join(context_parts), sources
+
+
+def build_answer_prompt(question: str, context: str) -> str:
+    return f"""
+Answer the question using only the evidence below.
+
+Evidence:
+{context}
+
+Question:
+{question}
+
+Instructions:
+- Answer only using the evidence above. Do not use outside knowledge.
+- Cite every factual claim using the evidence numbers in brackets, e.g. [1], [2].
+- If a claim depends on more than one piece of evidence, cite all of them, e.g. [1][2].
+- Never invent, guess, or reformat a filename, page number, or source detail -- the bracketed evidence numbers are the only citations you may use.
+- If the evidence does not contain enough information to answer, say so directly instead of guessing.
+
+Answer:
+"""
+
+
 class RAG:
     def __init__(self):
         configure_logging()
@@ -528,10 +598,7 @@ class RAG:
                 total_latency_seconds=time.perf_counter() - request_start,
             )
             return {
-                "answer": (
-                    "I couldn't find enough information in the "
-                    "provided documents to answer this question."
-                ),
+                "answer": NO_EVIDENCE_ANSWER,
                 "sources": [],
                 "citations": {"valid": [], "invalid": [], "citation_map": {}},
                 "retrieval": {
@@ -546,35 +613,7 @@ class RAG:
                 "trace_id": trace_id,
             }
 
-        context_parts = []
-        sources = []
-
-        for citation_id, result in enumerate(selected_results, start=1):
-            document = result["document"]
-
-            source = result["filename"]
-            page = result["page_number"]
-            chunk_id = result["chunk_id"]
-
-            if page is not None:
-                location = f"{source} — page {page} — chunk_{chunk_id}"
-            else:
-                location = f"{source} — chunk_{chunk_id}"
-
-            context_parts.append(
-                f"[{citation_id}] {location}\n{document}"
-            )
-
-            sources.append(
-                {
-                    "citation_id": citation_id,
-                    "document_id": result["document_id"],
-                    "filename": source,
-                    "page_number": page,
-                    "chunk_id": chunk_id,
-                    "rerank_score": result["rerank_score"],
-                }
-            )
+        context, sources = build_evidence_context(selected_results)
 
         if not enable_answer_generation:
             log_event(
@@ -600,26 +639,7 @@ class RAG:
                 "trace_id": trace_id,
             }
 
-        context = "\n\n".join(context_parts)
-
-        prompt = f"""
-Answer the question using only the evidence below.
-
-Evidence:
-{context}
-
-Question:
-{question}
-
-Instructions:
-- Answer only using the evidence above. Do not use outside knowledge.
-- Cite every factual claim using the evidence numbers in brackets, e.g. [1], [2].
-- If a claim depends on more than one piece of evidence, cite all of them, e.g. [1][2].
-- Never invent, guess, or reformat a filename, page number, or source detail -- the bracketed evidence numbers are the only citations you may use.
-- If the evidence does not contain enough information to answer, say so directly instead of guessing.
-
-Answer:
-"""
+        prompt = build_answer_prompt(question, context)
 
         try:
             answer = self.generator.generate(prompt, trace_id=trace_id)

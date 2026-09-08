@@ -6,3 +6,4 @@ pymupdf
 scikit-learn
 pytest
 google-genai
+langgraph

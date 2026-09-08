@@ -2,6 +2,10 @@ from pathlib import Path
 
 import streamlit as st
 
+from app.agents.graph import run_agent_workflow
+from app.agents.tools import RetrievalTools
+from app.agents.trace_view import build_trace_rows, summarize_workflow_run
+from app.agents.validation import MAX_VALIDATION_RETRIES
 from app.ingestion.parsers import UnsupportedFileTypeError, file_type_for
 from app.ingestion.pipeline import (
     DocumentParsingError,
@@ -185,6 +189,9 @@ if "last_retrieval_source" not in st.session_state:
 if "last_generation_error" not in st.session_state:
     st.session_state.last_generation_error = None
 
+if "last_agent_run" not in st.session_state:
+    st.session_state.last_agent_run = None
+
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -196,7 +203,7 @@ with st.sidebar:
 
     page = st.radio(
         "Navigate",
-        ["Chat", "Documents", "Retrieval Inspector", "Evaluation"],
+        ["Chat", "Documents", "Retrieval Inspector", "Agent Trace", "Evaluation"],
         label_visibility="collapsed",
     )
 
@@ -610,6 +617,104 @@ elif page == "Retrieval Inspector":
                         evidence.get("document", ""),
                         height=150,
                         key=f"evidence_{index}",
+                    )
+
+
+# ---------------------------------------------------------------------------
+# Agent Trace page
+# ---------------------------------------------------------------------------
+
+elif page == "Agent Trace":
+    st.header("Agent Trace")
+    st.caption(
+        "Runs the experimental Phase 9 multi-agent workflow (Router -> "
+        "Retrieval/Research -> Answer -> Validation) for one question and "
+        "shows how each stage behaved. This is separate from Chat, which "
+        "uses the standard Phase 1-8 pipeline."
+    )
+
+    if st.session_state.rag_error:
+        st.warning(
+            "ResearchDesk could not fully initialize, so the agent "
+            f"workflow is disabled. {st.session_state.rag_error}"
+        )
+    else:
+        agent_question = st.text_input(
+            "Question",
+            placeholder="Example: Compare Evo 1 and Evo 2.",
+            key="agent_trace_question",
+        )
+
+        if st.button("Run Agent Workflow", type="primary"):
+            if not agent_question.strip():
+                st.warning("Enter a question first.")
+            else:
+                with st.spinner("Running agent workflow..."):
+                    tools = RetrievalTools(st.session_state.rag)
+                    agent_result = run_agent_workflow(
+                        user_query=agent_question,
+                        generator=st.session_state.rag.generator,
+                        tools=tools,
+                    )
+                st.session_state.last_agent_run = agent_result
+                st.rerun()
+
+    agent_state = st.session_state.last_agent_run
+
+    if not agent_state:
+        st.info("Run a question above to see the agent workflow trace.")
+    else:
+        summary = summarize_workflow_run(agent_state)
+
+        st.divider()
+        st.caption(f"trace ID: {agent_state.trace_id}")
+
+        metric1, metric2, metric3 = st.columns(3)
+        metric1.metric("Selected route", summary["route"])
+        metric2.metric("Retries used", f"{summary['retry_count']}/{MAX_VALIDATION_RETRIES}")
+
+        if summary["is_valid"] is None:
+            validation_label = "n/a"
+        elif summary["is_valid"]:
+            validation_label = "Valid"
+        else:
+            validation_label = "Invalid"
+        metric3.metric("Validation", validation_label)
+
+        st.subheader("Final answer")
+        st.write(agent_state.final_answer or "(no answer produced)")
+
+        if summary["unsupported_claims"] or summary["citation_issues"]:
+            with st.expander("Validation issues", expanded=True):
+                if summary["unsupported_claims"]:
+                    st.markdown("**Unsupported claims:**")
+                    for claim in summary["unsupported_claims"]:
+                        st.write(f"- {claim}")
+                if summary["citation_issues"]:
+                    st.markdown("**Citation issues:**")
+                    for issue in summary["citation_issues"]:
+                        st.write(f"- {issue}")
+
+        st.divider()
+        st.subheader("Agent trace")
+        st.dataframe(
+            build_trace_rows(agent_state.agent_trace),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        if agent_state.retrieved_evidence:
+            st.divider()
+            st.subheader(f"Retrieved evidence ({len(agent_state.retrieved_evidence)})")
+
+            for index, evidence in enumerate(agent_state.retrieved_evidence, start=1):
+                with st.expander(f"Evidence {index} — {location_label(evidence)}"):
+                    st.caption(f"Reranking score: {format_score(evidence.get('rerank_score'))}")
+                    st.text_area(
+                        "Chunk text",
+                        evidence.get("document", ""),
+                        height=150,
+                        key=f"agent_evidence_{index}",
                     )
 
 
