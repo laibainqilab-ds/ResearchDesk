@@ -1,26 +1,9 @@
-from pathlib import Path
-
 import streamlit as st
 
-from app.agents.graph import run_agent_workflow
-from app.agents.tools import RetrievalTools
-from app.agents.trace_view import build_trace_rows, summarize_workflow_run
-from app.agents.validation import MAX_VALIDATION_RETRIES
-from app.ingestion.parsers import UnsupportedFileTypeError, file_type_for
-from app.ingestion.pipeline import (
-    DocumentParsingError,
-    DuplicateDocumentError,
-    EmptyDocumentError,
-    compute_document_id,
-    ingest_file,
-)
-from app.models.generator import GenerationUnavailableError
-from app.observability import new_trace_id
-from app.rag import RAG
+from app import api_client
+from app.api_client import ApiError
 from evaluation import report as evaluation_report
-
-
-DOCUMENTS_DIR = Path("data/documents")
+from pathlib import Path
 
 
 st.set_page_config(
@@ -107,22 +90,6 @@ inject_css()
 
 
 # ---------------------------------------------------------------------------
-# Resource loading
-# ---------------------------------------------------------------------------
-
-@st.cache_resource(show_spinner="Loading ResearchDesk models...")
-def load_rag() -> RAG:
-    return RAG()
-
-
-def get_rag() -> tuple[RAG | None, str | None]:
-    try:
-        return load_rag(), None
-    except ValueError as error:
-        return None, str(error)
-
-
-# ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
@@ -156,50 +123,119 @@ def render_sources(sources: list[dict]) -> None:
             )
 
 
-def render_generation_error_message(error: dict, trace_id: str | None = None) -> str:
-    """Compose a clean, honest user-facing message from the backend's structured error.
-
-    Includes the trace ID (when available) so a user-visible failure can be
-    correlated with its detailed entry in logs/researchdesk.jsonl.
-    """
-    message = f"Retrieval completed successfully, but answer generation failed: {error['message']}"
-
-    if trace_id:
-        message += f" (trace ID: {trace_id})"
-
-    return message
-
-
 # ---------------------------------------------------------------------------
 # Session state
 # ---------------------------------------------------------------------------
 
-if "rag" not in st.session_state or "rag_error" not in st.session_state:
-    st.session_state.rag, st.session_state.rag_error = get_rag()
+if "token" not in st.session_state:
+    st.session_state.token = None
+
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+
+if "current_chat_id" not in st.session_state:
+    st.session_state.current_chat_id = None
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "last_retrieval" not in st.session_state:
-    st.session_state.last_retrieval = None
+if "auth_error" not in st.session_state:
+    st.session_state.auth_error = None
 
-if "last_retrieval_source" not in st.session_state:
-    st.session_state.last_retrieval_source = None
 
-if "last_generation_error" not in st.session_state:
-    st.session_state.last_generation_error = None
+def is_authenticated() -> bool:
+    return st.session_state.token is not None
 
-if "last_agent_run" not in st.session_state:
-    st.session_state.last_agent_run = None
+
+def logout() -> None:
+    st.session_state.token = None
+    st.session_state.user_email = None
+    st.session_state.current_chat_id = None
+    st.session_state.messages = []
+
+
+def refresh_messages() -> None:
+    if st.session_state.current_chat_id is None:
+        st.session_state.messages = []
+        return
+    st.session_state.messages = api_client.list_messages(
+        st.session_state.token, st.session_state.current_chat_id
+    )
+
+
+# ---------------------------------------------------------------------------
+# Auth gate
+# ---------------------------------------------------------------------------
+
+if not is_authenticated():
+    st.markdown('<div class="rd-brand">ResearchDesk</div>', unsafe_allow_html=True)
+    st.markdown('<div class="rd-tagline">Document Research Assistant</div>', unsafe_allow_html=True)
+
+    login_tab, signup_tab = st.tabs(["Log in", "Sign up"])
+
+    with login_tab:
+        with st.form("login_form"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Log in", type="primary")
+
+        if submitted:
+            try:
+                token = api_client.login(email, password)
+                st.session_state.token = token
+                st.session_state.user_email = email
+                st.session_state.auth_error = None
+                st.rerun()
+            except ApiError as error:
+                st.session_state.auth_error = error.detail
+            except Exception as error:
+                st.session_state.auth_error = f"Could not reach the ResearchDesk API: {error}"
+
+    with signup_tab:
+        with st.form("signup_form"):
+            new_email = st.text_input("Email", key="signup_email")
+            new_password = st.text_input(
+                "Password (min 8 characters)", type="password", key="signup_password"
+            )
+            submitted_signup = st.form_submit_button("Create account", type="primary")
+
+        if submitted_signup:
+            try:
+                token = api_client.signup(new_email, new_password)
+                st.session_state.token = token
+                st.session_state.user_email = new_email
+                st.session_state.auth_error = None
+                st.rerun()
+            except ApiError as error:
+                st.session_state.auth_error = error.detail
+            except Exception as error:
+                st.session_state.auth_error = f"Could not reach the ResearchDesk API: {error}"
+
+    if st.session_state.auth_error:
+        st.error(st.session_state.auth_error)
+
+    st.stop()
 
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
+try:
+    chats = api_client.list_chats(st.session_state.token)
+    api_unavailable = None
+except Exception as error:
+    chats = []
+    api_unavailable = str(error)
+
 with st.sidebar:
     st.markdown('<div class="rd-brand">ResearchDesk</div>', unsafe_allow_html=True)
     st.markdown('<div class="rd-tagline">Document Research Assistant</div>', unsafe_allow_html=True)
+
+    st.caption(f"Signed in as {st.session_state.user_email}")
+    if st.button("Log out"):
+        logout()
+        st.rerun()
 
     page = st.radio(
         "Navigate",
@@ -208,28 +244,34 @@ with st.sidebar:
     )
 
     st.divider()
+    st.markdown("**Chats**")
 
-    st.markdown("**System status**")
-
-    if st.session_state.rag is None:
-        render_status("Retrieval", False, "Unavailable")
+    if api_unavailable:
+        render_status("API", False, f"Unavailable — {api_unavailable}")
     else:
-        indexed_chunks = st.session_state.rag.store.count()
+        if st.button("+ New chat"):
+            chat = api_client.create_chat(st.session_state.token)
+            st.session_state.current_chat_id = chat["id"]
+            refresh_messages()
+            st.rerun()
 
-        if indexed_chunks > 0:
-            render_status("Retrieval", True, "Ready")
-        else:
-            render_status("Retrieval", False, "No documents indexed")
+        for chat in chats:
+            is_current = chat["id"] == st.session_state.current_chat_id
+            label = ("➡ " if is_current else "") + chat["title"]
 
-    if st.session_state.rag_error:
-        render_status("Generation", False, f"Unavailable — {st.session_state.rag_error}")
-    elif st.session_state.last_generation_error:
-        render_status("Generation", False, "Last attempt failed")
-    else:
-        render_status("Generation", True, "Configured")
-
-    if st.session_state.rag is not None:
-        st.metric("Indexed chunks", st.session_state.rag.store.count())
+            chat_col, delete_col = st.columns([5, 1])
+            with chat_col:
+                if st.button(label, key=f"select_chat_{chat['id']}", use_container_width=True):
+                    st.session_state.current_chat_id = chat["id"]
+                    refresh_messages()
+                    st.rerun()
+            with delete_col:
+                if st.button("🗑", key=f"delete_chat_{chat['id']}"):
+                    api_client.delete_chat(st.session_state.token, chat["id"])
+                    if st.session_state.current_chat_id == chat["id"]:
+                        st.session_state.current_chat_id = None
+                        st.session_state.messages = []
+                    st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -240,88 +282,76 @@ if page == "Chat":
     st.header("Chat")
     st.caption("Ask questions about your indexed documents and get cited, grounded answers.")
 
-    if st.session_state.rag_error:
-        st.warning(
-            "ResearchDesk could not fully initialize, so chat is disabled. "
-            f"{st.session_state.rag_error}"
-        )
-    elif not st.session_state.messages:
+    if api_unavailable:
+        st.warning(f"ResearchDesk API is unavailable: {api_unavailable}")
+    elif st.session_state.current_chat_id is None:
         with st.container(border=True):
             st.markdown("#### Ask ResearchDesk")
             st.write(
-                "ResearchDesk answers your questions using only the documents "
-                "that have been indexed into its vector store, and every "
-                "answer is grounded in cited source passages below it."
+                "Start a new chat from the sidebar, or select an existing one, then ask "
+                "questions about your indexed documents. Every answer is grounded in cited "
+                "source passages below it."
             )
+    else:
+        mode = st.radio(
+            "Mode",
+            ["rag", "agent"],
+            format_func=lambda value: "Standard RAG" if value == "rag" else "Multi-agent workflow",
+            horizontal=True,
+        )
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            if message["role"] == "assistant" and message.get("is_error"):
-                st.warning(message["content"])
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                if message["role"] == "assistant" and message.get("is_error"):
+                    st.warning(message["content"])
+                else:
+                    st.write(message["content"])
+
+                sources = message.get("sources")
+
+                if message["role"] == "assistant" and sources:
+                    with st.expander(f"Sources ({len(sources)})"):
+                        render_sources(sources)
+
+                trace_id = message.get("trace_id")
+
+                if message["role"] == "assistant" and trace_id:
+                    st.caption(f"trace ID: {trace_id} · mode: {message.get('mode', 'n/a')}")
+
+        question = st.chat_input("Ask a question about your documents")
+
+        if question:
+            with st.spinner("Thinking..."):
+                try:
+                    api_client.post_message(
+                        st.session_state.token, st.session_state.current_chat_id, question, mode
+                    )
+                except ApiError as error:
+                    st.error(f"Request failed: {error.detail}")
+                else:
+                    refresh_messages()
+            st.rerun()
+
+        with st.expander("Link another chat as context"):
+            other_chats = [chat for chat in chats if chat["id"] != st.session_state.current_chat_id]
+
+            if not other_chats:
+                st.caption("No other chats available to link.")
             else:
-                st.write(message["content"])
+                target = st.selectbox(
+                    "Pull relevant context from:",
+                    options=other_chats,
+                    format_func=lambda chat: chat["title"],
+                )
 
-            sources = message.get("sources")
-
-            if message["role"] == "assistant" and sources:
-                with st.expander(f"Sources ({len(sources)})"):
-                    render_sources(sources)
-
-            trace_id = message.get("trace_id")
-
-            if message["role"] == "assistant" and trace_id:
-                st.caption(f"trace ID: {trace_id}")
-
-    question = st.chat_input(
-        "Ask a question about your documents",
-        disabled=bool(st.session_state.rag_error),
-    )
-
-    if question:
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": question,
-            }
-        )
-
-        conversation_history = st.session_state.messages[:-1]
-
-        with st.spinner("Searching documents..."):
-            result = st.session_state.rag.answer(
-                question=question,
-                conversation_history=conversation_history,
-            )
-
-        trace_id = result.get("trace_id")
-
-        last_retrieval = result.get("retrieval")
-        if last_retrieval is not None:
-            last_retrieval = {**last_retrieval, "trace_id": trace_id}
-        st.session_state.last_retrieval = last_retrieval
-        st.session_state.last_retrieval_source = "Chat"
-
-        error = result.get("error")
-        st.session_state.last_generation_error = error
-
-        if error is not None:
-            content = render_generation_error_message(error, trace_id)
-            is_error = True
-        else:
-            content = result["answer"]
-            is_error = False
-
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": content,
-                "sources": result["sources"],
-                "is_error": is_error,
-                "trace_id": trace_id,
-            }
-        )
-
-        st.rerun()
+                if st.button("Link chat"):
+                    try:
+                        api_client.create_context_link(
+                            st.session_state.token, st.session_state.current_chat_id, target["id"]
+                        )
+                        st.success(f"Linked '{target['title']}' as context for this chat.")
+                    except ApiError as error:
+                        st.error(f"Could not link chat: {error.detail}")
 
 
 # ---------------------------------------------------------------------------
@@ -332,8 +362,8 @@ elif page == "Documents":
     st.header("Documents")
     st.caption("Upload PDF, TXT, or Markdown documents and manage what's indexed.")
 
-    if st.session_state.rag is None:
-        st.warning("ResearchDesk could not initialize the vector store.")
+    if api_unavailable:
+        st.warning(f"ResearchDesk API is unavailable: {api_unavailable}")
     else:
         st.subheader("Upload documents")
 
@@ -344,39 +374,13 @@ elif page == "Documents":
         )
 
         if uploaded_files and st.button("Ingest uploaded files", type="primary"):
-            DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
-
             for uploaded_file in uploaded_files:
-                save_path = None
-
-                with st.status(
-                    f"Processing {uploaded_file.name}...", expanded=True
-                ) as status:
+                with st.status(f"Processing {uploaded_file.name}...", expanded=True) as status:
                     try:
-                        file_type_for(uploaded_file.name)
-                        st.write("Validating file type ✓")
-
-                        file_bytes = uploaded_file.getvalue()
-                        document_id = compute_document_id(file_bytes)
-                        save_path = DOCUMENTS_DIR / f"{document_id[:16]}_{uploaded_file.name}"
-                        save_path.write_bytes(file_bytes)
-
-                        st.write("Parsing and chunking...")
-
-                        result = ingest_file(
-                            file_path=str(save_path),
-                            filename=uploaded_file.name,
-                            store=st.session_state.rag.store,
-                            embedder=st.session_state.rag.embedder,
+                        result = api_client.upload_document(
+                            st.session_state.token, uploaded_file.name, uploaded_file.getvalue()
                         )
-
-                        st.write("Embedding and storing ✓")
-
-                        pages_note = (
-                            f", {result['page_count']} pages"
-                            if result["page_count"]
-                            else ""
-                        )
+                        pages_note = f", {result['page_count']} pages" if result.get("page_count") else ""
                         status.update(
                             label=(
                                 f"{uploaded_file.name} — indexed "
@@ -384,50 +388,28 @@ elif page == "Documents":
                             ),
                             state="complete",
                         )
-                    except UnsupportedFileTypeError as error:
-                        status.update(
-                            label=f"{uploaded_file.name} — unsupported file type",
-                            state="error",
-                        )
-                        st.error(str(error))
-                    except DuplicateDocumentError as error:
-                        if save_path is not None:
-                            save_path.unlink(missing_ok=True)
-                        status.update(
-                            label=f"{uploaded_file.name} — already indexed",
-                            state="complete",
-                        )
-                        st.info(str(error))
-                    except EmptyDocumentError as error:
-                        if save_path is not None:
-                            save_path.unlink(missing_ok=True)
-                        status.update(
-                            label=f"{uploaded_file.name} — empty document",
-                            state="error",
-                        )
-                        st.error(str(error))
-                    except DocumentParsingError as error:
-                        if save_path is not None:
-                            save_path.unlink(missing_ok=True)
-                        status.update(
-                            label=f"{uploaded_file.name} — failed to process",
-                            state="error",
-                        )
-                        st.error(str(error))
+                    except ApiError as error:
+                        if error.status_code == 409:
+                            status.update(label=f"{uploaded_file.name} — already indexed", state="complete")
+                            st.info(error.detail)
+                        elif error.status_code == 415:
+                            status.update(label=f"{uploaded_file.name} — unsupported file type", state="error")
+                            st.error(error.detail)
+                        else:
+                            status.update(label=f"{uploaded_file.name} — failed to process", state="error")
+                            st.error(error.detail)
 
             st.rerun()
 
         st.divider()
         st.subheader("Indexed documents")
 
-        documents = st.session_state.rag.store.list_documents()
+        documents = api_client.list_documents(st.session_state.token)
 
         if not documents:
             with st.container(border=True):
                 st.markdown("#### No documents indexed yet")
-                st.write(
-                    "Upload a PDF, TXT, or Markdown file above to get started."
-                )
+                st.write("Upload a PDF, TXT, or Markdown file above to get started.")
         else:
             column1, column2 = st.columns(2)
             column1.metric("Documents", len(documents))
@@ -442,11 +424,7 @@ elif page == "Documents":
                     with info_col:
                         st.markdown(f"**{document.get('filename') or 'Unknown file'}**")
 
-                        page_note = (
-                            f"{document['page_count']} pages · "
-                            if document.get("page_count")
-                            else ""
-                        )
+                        page_note = f"{document['page_count']} pages · " if document.get("page_count") else ""
                         st.caption(
                             f"{document.get('file_type') or 'UNKNOWN'} · "
                             f"{page_note}{document['chunk_count']} chunks"
@@ -454,13 +432,8 @@ elif page == "Documents":
                         st.caption(f"Document ID: {document['document_id'][:16]}...")
 
                     with action_col:
-                        if st.button(
-                            "Delete",
-                            key=f"delete_{document['document_id']}",
-                        ):
-                            st.session_state.rag.store.delete_document(
-                                document["document_id"]
-                            )
+                        if st.button("Delete", key=f"delete_doc_{document['document_id']}"):
+                            api_client.delete_document(st.session_state.token, document["document_id"])
                             st.rerun()
 
 
@@ -472,152 +445,86 @@ elif page == "Retrieval Inspector":
     st.header("Retrieval Inspector")
     st.caption(
         "Question → Query rewriting → Search queries → Retrieval candidates "
-        "→ Deduplication → Reranking → Final evidence"
+        "→ Deduplication → Reranking → Final evidence, read from the persisted "
+        "run record of a Standard RAG chat message."
     )
 
-    st.divider()
-
-    with st.expander("Run a retrieval-only test (no final answer generation)"):
-        st.write(
-            "This runs real query generation and retrieval for your "
-            "question, without generating a final written answer."
-        )
-
-        inspector_question = st.text_input(
-            "Question",
-            placeholder="Example: How does Evo 2 help with genetic research?",
-        )
-
-        if st.button("Run Retrieval Inspector", type="primary"):
-            if not inspector_question.strip():
-                st.warning("Enter a question first.")
-            elif st.session_state.rag is None:
-                st.warning("ResearchDesk could not initialize the retrieval pipeline.")
-            else:
-                inspector_trace_id = new_trace_id()
-
-                with st.spinner("Generating search queries..."):
-                    try:
-                        search_queries = st.session_state.rag.generator.generate_queries(
-                            question=inspector_question,
-                            num_queries=3,
-                            trace_id=inspector_trace_id,
-                        )
-                    except GenerationUnavailableError:
-                        search_queries = []
-
-                if not search_queries:
-                    search_queries = [inspector_question]
-
-                with st.spinner("Running retrieval pipeline..."):
-                    retrieval = st.session_state.rag.retrieve(
-                        retrieval_question=inspector_question,
-                        search_queries=search_queries,
-                        top_k=3,
-                        trace_id=inspector_trace_id,
-                    )
-
-                st.session_state.last_retrieval = {
-                    "original_question": inspector_question,
-                    "rewritten_question": inspector_question,
-                    "search_queries": search_queries,
-                    "candidates": retrieval["candidates"],
-                    "final_evidence": retrieval["final_evidence"],
-                    "trace_id": inspector_trace_id,
-                }
-                st.session_state.last_retrieval_source = "Manual test"
-
-                st.rerun()
-
-    retrieval = st.session_state.last_retrieval
-
-    if not retrieval:
-        st.info(
-            "Ask a question in Chat, or run the retrieval-only test above, "
-            "to inspect the retrieval pipeline."
-        )
+    if api_unavailable:
+        st.warning(f"ResearchDesk API is unavailable: {api_unavailable}")
+    elif st.session_state.current_chat_id is None:
+        st.info("Select a chat from the sidebar and ask a Standard RAG question to inspect it here.")
     else:
-        st.divider()
-        st.caption(f"Showing retrieval from: {st.session_state.last_retrieval_source}")
+        runs = [
+            run for run in api_client.list_runs(st.session_state.token, st.session_state.current_chat_id)
+            if run["mode"] == "rag"
+        ]
 
-        if retrieval.get("trace_id"):
-            st.caption(f"trace ID: {retrieval['trace_id']}")
-
-        question_col, rewritten_col = st.columns(2)
-
-        with question_col:
-            st.markdown("**Original question**")
-            st.write(retrieval["original_question"])
-
-        with rewritten_col:
-            st.markdown("**Rewritten question**")
-            st.write(retrieval["rewritten_question"])
-
-        st.subheader("Generated search queries")
-
-        for index, query in enumerate(retrieval["search_queries"], start=1):
-            st.write(f"{index}. {query}")
-
-        candidates = retrieval["candidates"]
-        final_evidence = retrieval["final_evidence"]
-
-        metric1, metric2, metric3 = st.columns(3)
-        metric1.metric("Search queries", len(retrieval["search_queries"]))
-        metric2.metric("Unique candidates", len(candidates))
-        metric3.metric("Final evidence", len(final_evidence))
-
-        st.divider()
-
-        st.subheader("Retrieved and reranked candidates")
-        st.caption("Ranked by BGE reranking score, after deduplication by document and chunk.")
-
-        if not candidates:
-            st.warning("No candidates were retrieved.")
+        if not runs:
+            st.info("No Standard RAG runs yet in this chat. Ask a question in Chat mode 'Standard RAG'.")
         else:
-            for index, candidate in enumerate(candidates, start=1):
-                with st.expander(f"Rank {index} — {location_label(candidate)}"):
-                    st.caption(f"Search query: {candidate.get('search_query', 'n/a')}")
+            selected_run = st.selectbox(
+                "Run",
+                options=list(reversed(runs)),
+                format_func=lambda run: f"{run['created_at']} · trace {run['trace_id']}",
+            )
 
-                    distance_col, score_col = st.columns(2)
-                    distance_col.metric(
-                        "Retrieval distance",
-                        format_score(candidate.get("retrieval_distance")),
-                    )
-                    score_col.metric(
-                        "Reranking score",
-                        format_score(candidate.get("rerank_score")),
-                    )
+            retrieval = selected_run["retrieval"] or {}
+            st.caption(f"trace ID: {selected_run['trace_id']}")
 
-                    st.text_area(
-                        "Chunk text",
-                        candidate.get("document", ""),
-                        height=180,
-                        key=f"candidate_{index}",
-                    )
+            question_col, rewritten_col = st.columns(2)
 
-        st.divider()
+            with question_col:
+                st.markdown("**Original question**")
+                st.write(retrieval.get("original_question", "n/a"))
 
-        st.subheader("Final evidence passed to generator")
-        st.caption("The exact top-K chunks used to generate the answer.")
+            with rewritten_col:
+                st.markdown("**Rewritten question**")
+                st.write(retrieval.get("rewritten_question", "n/a"))
 
-        if not final_evidence:
-            st.warning("No final evidence was selected.")
-        else:
-            for index, evidence in enumerate(final_evidence, start=1):
-                with st.expander(
-                    f"Evidence {index} — {location_label(evidence)}",
-                    expanded=True,
-                ):
-                    st.caption(
-                        f"Reranking score: {format_score(evidence.get('rerank_score'))}"
-                    )
+            search_queries = retrieval.get("search_queries", [])
+            st.subheader("Generated search queries")
+            for index, query in enumerate(search_queries, start=1):
+                st.write(f"{index}. {query}")
 
-                    st.text_area(
-                        "Chunk text",
-                        evidence.get("document", ""),
-                        height=150,
-                        key=f"evidence_{index}",
-                    )
+            candidates = retrieval.get("candidates", [])
+            final_evidence = retrieval.get("final_evidence", [])
+
+            metric1, metric2, metric3 = st.columns(3)
+            metric1.metric("Search queries", len(search_queries))
+            metric2.metric("Unique candidates", len(candidates))
+            metric3.metric("Final evidence", len(final_evidence))
+
+            st.divider()
+            st.subheader("Retrieved and reranked candidates")
+            st.caption("Ranked by BGE reranking score, after deduplication by document and chunk.")
+
+            if not candidates:
+                st.warning("No candidates were retrieved.")
+            else:
+                for index, candidate in enumerate(candidates, start=1):
+                    with st.expander(f"Rank {index} — {location_label(candidate)}"):
+                        st.caption(f"Search query: {candidate.get('search_query', 'n/a')}")
+
+                        distance_col, score_col = st.columns(2)
+                        distance_col.metric("Retrieval distance", format_score(candidate.get("retrieval_distance")))
+                        score_col.metric("Reranking score", format_score(candidate.get("rerank_score")))
+
+                        st.text_area(
+                            "Chunk text", candidate.get("document", ""), height=180, key=f"candidate_{index}"
+                        )
+
+            st.divider()
+            st.subheader("Final evidence passed to generator")
+
+            if not final_evidence:
+                st.warning("No final evidence was selected.")
+            else:
+                for index, evidence in enumerate(final_evidence, start=1):
+                    with st.expander(f"Evidence {index} — {location_label(evidence)}", expanded=True):
+                        st.caption(f"Reranking score: {format_score(evidence.get('rerank_score'))}")
+                        st.text_area(
+                            "Chunk text", evidence.get("document", ""), height=150, key=f"evidence_{index}"
+                        )
 
 
 # ---------------------------------------------------------------------------
@@ -627,95 +534,73 @@ elif page == "Retrieval Inspector":
 elif page == "Agent Trace":
     st.header("Agent Trace")
     st.caption(
-        "Runs the experimental Phase 9 multi-agent workflow (Router -> "
-        "Retrieval/Research -> Answer -> Validation) for one question and "
-        "shows how each stage behaved. This is separate from Chat, which "
-        "uses the standard Phase 1-8 pipeline."
+        "Shows the persisted run record of a Multi-agent workflow chat message "
+        "(Router -> Retrieval/Research -> Answer -> Validation)."
     )
 
-    if st.session_state.rag_error:
-        st.warning(
-            "ResearchDesk could not fully initialize, so the agent "
-            f"workflow is disabled. {st.session_state.rag_error}"
-        )
+    if api_unavailable:
+        st.warning(f"ResearchDesk API is unavailable: {api_unavailable}")
+    elif st.session_state.current_chat_id is None:
+        st.info("Select a chat from the sidebar and ask a question in 'Multi-agent workflow' mode.")
     else:
-        agent_question = st.text_input(
-            "Question",
-            placeholder="Example: Compare Evo 1 and Evo 2.",
-            key="agent_trace_question",
-        )
+        runs = [
+            run for run in api_client.list_runs(st.session_state.token, st.session_state.current_chat_id)
+            if run["mode"] == "agent"
+        ]
 
-        if st.button("Run Agent Workflow", type="primary"):
-            if not agent_question.strip():
-                st.warning("Enter a question first.")
-            else:
-                with st.spinner("Running agent workflow..."):
-                    tools = RetrievalTools(st.session_state.rag)
-                    agent_result = run_agent_workflow(
-                        user_query=agent_question,
-                        generator=st.session_state.rag.generator,
-                        tools=tools,
-                    )
-                st.session_state.last_agent_run = agent_result
-                st.rerun()
-
-    agent_state = st.session_state.last_agent_run
-
-    if not agent_state:
-        st.info("Run a question above to see the agent workflow trace.")
-    else:
-        summary = summarize_workflow_run(agent_state)
-
-        st.divider()
-        st.caption(f"trace ID: {agent_state.trace_id}")
-
-        metric1, metric2, metric3 = st.columns(3)
-        metric1.metric("Selected route", summary["route"])
-        metric2.metric("Retries used", f"{summary['retry_count']}/{MAX_VALIDATION_RETRIES}")
-
-        if summary["is_valid"] is None:
-            validation_label = "n/a"
-        elif summary["is_valid"]:
-            validation_label = "Valid"
+        if not runs:
+            st.info("No agent workflow runs yet in this chat. Ask a question in Chat mode 'Multi-agent workflow'.")
         else:
-            validation_label = "Invalid"
-        metric3.metric("Validation", validation_label)
+            selected_run = st.selectbox(
+                "Run",
+                options=list(reversed(runs)),
+                format_func=lambda run: f"{run['created_at']} · trace {run['trace_id']}",
+            )
 
-        st.subheader("Final answer")
-        st.write(agent_state.final_answer or "(no answer produced)")
+            message_for_run = next(
+                (m for m in st.session_state.messages if m.get("trace_id") == selected_run["trace_id"]),
+                None,
+            )
 
-        if summary["unsupported_claims"] or summary["citation_issues"]:
-            with st.expander("Validation issues", expanded=True):
-                if summary["unsupported_claims"]:
-                    st.markdown("**Unsupported claims:**")
-                    for claim in summary["unsupported_claims"]:
-                        st.write(f"- {claim}")
-                if summary["citation_issues"]:
-                    st.markdown("**Citation issues:**")
-                    for issue in summary["citation_issues"]:
-                        st.write(f"- {issue}")
+            st.caption(f"trace ID: {selected_run['trace_id']}")
 
-        st.divider()
-        st.subheader("Agent trace")
-        st.dataframe(
-            build_trace_rows(agent_state.agent_trace),
-            use_container_width=True,
-            hide_index=True,
-        )
+            metric1, metric2, metric3 = st.columns(3)
+            metric1.metric("Selected route", selected_run.get("route") or "n/a")
+            metric2.metric("Retries used", selected_run.get("retry_count", "n/a"))
 
-        if agent_state.retrieved_evidence:
+            is_valid = selected_run.get("is_valid")
+            if is_valid is None:
+                validation_label = "n/a"
+            elif is_valid:
+                validation_label = "Valid"
+            else:
+                validation_label = "Invalid"
+            metric3.metric("Validation", validation_label)
+
+            st.subheader("Final answer")
+            st.write(message_for_run["content"] if message_for_run else "(message not found)")
+
             st.divider()
-            st.subheader(f"Retrieved evidence ({len(agent_state.retrieved_evidence)})")
+            st.subheader("Agent trace")
+            trace_rows = [
+                {
+                    "stage": entry.get("stage"),
+                    "status": entry.get("status"),
+                    "duration_seconds": entry.get("duration_seconds"),
+                    "decision": entry.get("decision"),
+                    "tools_used": ", ".join(entry.get("tools_used") or []) or "none",
+                }
+                for entry in (selected_run.get("agent_trace") or [])
+            ]
+            st.dataframe(trace_rows, use_container_width=True, hide_index=True)
 
-            for index, evidence in enumerate(agent_state.retrieved_evidence, start=1):
-                with st.expander(f"Evidence {index} — {location_label(evidence)}"):
-                    st.caption(f"Reranking score: {format_score(evidence.get('rerank_score'))}")
-                    st.text_area(
-                        "Chunk text",
-                        evidence.get("document", ""),
-                        height=150,
-                        key=f"agent_evidence_{index}",
-                    )
+            if message_for_run and message_for_run.get("sources"):
+                st.divider()
+                st.subheader(f"Retrieved evidence ({len(message_for_run['sources'])})")
+
+                for index, evidence in enumerate(message_for_run["sources"], start=1):
+                    with st.expander(f"Evidence {index} — {location_label(evidence)}"):
+                        st.caption(f"Reranking score: {format_score(evidence.get('rerank_score'))}")
 
 
 # ---------------------------------------------------------------------------

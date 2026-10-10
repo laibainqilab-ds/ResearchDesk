@@ -7,3 +7,11 @@ scikit-learn
 pytest
 google-genai
 langgraph
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+bcrypt
+pyjwt
+httpx
+email-validator
