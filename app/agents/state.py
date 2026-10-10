@@ -97,6 +97,7 @@ class AgentState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     user_query: str
+    owner_id: str | None = None
     conversation_context: list[dict] = Field(default_factory=list)
     selected_route: RouteType | None = None
     rewritten_query: str | None = None

@@ -136,9 +136,9 @@ class ChatService:
         self.messages.add_user_message(chat_id, content)
 
         if mode == "agent":
-            result = self._run_agent(content, conversation_history + cross_chat_context, trace_id)
+            result = self._run_agent(content, conversation_history + cross_chat_context, trace_id, user_id)
         else:
-            result = self._run_rag(content, conversation_history + cross_chat_context, trace_id)
+            result = self._run_rag(content, conversation_history + cross_chat_context, trace_id, user_id)
 
         assistant_message = self.messages.add_assistant_message(
             chat_id=chat_id,
@@ -174,9 +174,10 @@ class ChatService:
             "sources": result["sources"],
         }
 
-    def _run_rag(self, question: str, conversation_history: list[dict], trace_id: str) -> dict:
+    def _run_rag(self, question: str, conversation_history: list[dict], trace_id: str, owner_id: str) -> dict:
         result = self.rag_service.answer(
             question=question,
+            owner_id=owner_id,
             conversation_history=conversation_history,
             trace_id=trace_id,
         )
@@ -200,9 +201,10 @@ class ChatService:
             "retrieval": result.get("retrieval"),
         }
 
-    def _run_agent(self, question: str, conversation_context: list[dict], trace_id: str) -> dict:
+    def _run_agent(self, question: str, conversation_context: list[dict], trace_id: str, owner_id: str) -> dict:
         agent_state = self.agent_service.run(
             user_query=question,
+            owner_id=owner_id,
             conversation_context=conversation_context,
             trace_id=trace_id,
         )

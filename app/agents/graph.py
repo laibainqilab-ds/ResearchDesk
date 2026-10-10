@@ -66,7 +66,9 @@ def _run_retrieval(state: AgentState, tools: RetrievalTools) -> dict:
     query = state.rewritten_query or state.user_query
     start = time.perf_counter()
 
-    evidence = tools.search_documents(query, top_k=RETRIEVAL_TOP_K, trace_id=trace_id)
+    evidence = tools.search_documents(
+        query, top_k=RETRIEVAL_TOP_K, owner_id=state.owner_id, trace_id=trace_id
+    )
     duration = time.perf_counter() - start
 
     log_event(
@@ -146,16 +148,26 @@ def run_agent_workflow(
     user_query: str,
     generator: Generator,
     tools: RetrievalTools,
+    owner_id: str | None = None,
     conversation_context: list[dict] | None = None,
     trace_id: str | None = None,
 ) -> AgentState:
     """Run the full Router -> Retrieval/Research -> Answer -> Validation
-    workflow for one user query and return the final AgentState."""
+    workflow for one user query and return the final AgentState.
+
+    `owner_id` is carried on the resulting AgentState and threaded into
+    every retrieval call (_run_retrieval, app.agents.research.run_research)
+    so results are restricted to that user's documents -- the actual
+    authorization boundary for agent-mode retrieval. Optional only for
+    callers with no user concept (direct graph-level tests, offline
+    evaluation scripts); AgentService.run() -- the only production caller --
+    always supplies a real owner_id."""
     configure_logging()
     trace_id = trace_id or new_trace_id()
 
     initial_state = AgentState(
         user_query=user_query,
+        owner_id=owner_id,
         conversation_context=conversation_context or [],
         trace_id=trace_id,
     )

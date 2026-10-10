@@ -37,11 +37,24 @@ def compute_document_id(file_bytes: bytes) -> str:
     return hashlib.sha256(file_bytes).hexdigest()
 
 
-def ingest_file(file_path: str, filename: str, store, embedder, trace_id: str | None = None) -> dict:
+def ingest_file(
+    file_path: str,
+    filename: str,
+    store,
+    embedder,
+    owner_id: str | None = None,
+    trace_id: str | None = None,
+) -> dict:
     """Parse, chunk, embed, and store a single file.
 
     `store` must provide count_document_chunks, add_documents, delete_document.
     `embedder` must provide embed(texts) -> list[list[float]].
+
+    `owner_id`, when given, is tagged onto every stored chunk's metadata so
+    retrieval can later be restricted to a specific user -- see
+    app.rag.RAG.retrieve()'s `owner_id` filter. Optional (defaults to
+    untagged chunks) so ingestion-pipeline-only callers (tests, offline
+    scripts) that have no user concept are unaffected.
 
     Raises UnsupportedFileTypeError, EmptyDocumentError, DuplicateDocumentError,
     or DocumentParsingError. On success returns a summary dict with
@@ -117,7 +130,7 @@ def ingest_file(file_path: str, filename: str, store, embedder, trace_id: str | 
 
     ids = [f"{chunk.document_id}_chunk_{chunk.chunk_id}" for chunk in chunks]
     texts = [chunk.text for chunk in chunks]
-    metadatas = [_build_metadata(chunk) for chunk in chunks]
+    metadatas = [_build_metadata(chunk, owner_id) for chunk in chunks]
 
     try:
         embeddings = embedder.embed(texts)
@@ -169,7 +182,7 @@ def ingest_file(file_path: str, filename: str, store, embedder, trace_id: str | 
     }
 
 
-def _build_metadata(chunk) -> dict:
+def _build_metadata(chunk, owner_id: str | None = None) -> dict:
     metadata = {
         "document_id": chunk.document_id,
         "filename": chunk.filename,
@@ -182,5 +195,8 @@ def _build_metadata(chunk) -> dict:
 
     if chunk.page_number is not None:
         metadata["page_number"] = chunk.page_number
+
+    if owner_id is not None:
+        metadata["owner_id"] = owner_id
 
     return metadata

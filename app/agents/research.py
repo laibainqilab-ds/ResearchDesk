@@ -204,7 +204,9 @@ def run_research(
         new_evidence = []
         for subquestion in pending:
             new_evidence.extend(
-                tools.search_documents(subquestion, top_k=SEARCH_TOP_K, trace_id=trace_id)
+                tools.search_documents(
+                    subquestion, top_k=SEARCH_TOP_K, owner_id=state.owner_id, trace_id=trace_id
+                )
             )
         all_evidence = _dedupe_evidence(all_evidence + new_evidence)
         duration = time.perf_counter() - start

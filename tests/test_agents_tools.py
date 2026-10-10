@@ -42,6 +42,7 @@ def test_search_documents_calls_rag_retrieve_with_single_query_no_document_filte
         search_queries=["what is Evo 2?"],
         top_k=5,
         document_id=None,
+        owner_id=None,
         enable_reranking=False,
         trace_id=None,
     )
@@ -88,6 +89,7 @@ def test_search_specific_document_passes_document_id_filter():
         search_queries=["a question"],
         top_k=2,
         document_id="docA",
+        owner_id=None,
         enable_reranking=True,
         trace_id=None,
     )
@@ -114,7 +116,7 @@ def test_list_available_documents_wraps_store_list_documents():
 
     result = tools.list_available_documents()
 
-    rag.store.list_documents.assert_called_once_with()
+    rag.store.list_documents.assert_called_once_with(owner_id=None)
     assert result == documents
 
 
@@ -156,5 +158,5 @@ def test_get_document_page_wraps_store_get_document_chunks():
 
     result = tools.get_document_page("docA", 3)
 
-    rag.store.get_document_chunks.assert_called_once_with("docA", page_number=3)
+    rag.store.get_document_chunks.assert_called_once_with("docA", page_number=3, owner_id=None)
     assert result == chunks

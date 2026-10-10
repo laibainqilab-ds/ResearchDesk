@@ -219,15 +219,35 @@ class RAG:
         search_queries: list[str],
         top_k: int = 3,
         document_id: str | None = None,
+        owner_id: str | None = None,
         enable_reranking: bool = True,
         trace_id: str | None = None,
     ) -> dict:
+        """`owner_id`, when given, restricts the underlying Chroma query to
+        chunks tagged with that owner at ingestion time (see
+        app.ingestion.pipeline.ingest_file) -- the actual authorization
+        boundary enforced at the vector-search filtering layer, not a
+        post-hoc filter over already-retrieved results. Optional (None =
+        unrestricted) only because this method is also used by
+        ingestion-pipeline tests and offline evaluation scripts that have no
+        per-user concept; every authenticated call path (RagService.answer,
+        RetrievalTools) always supplies a real owner_id."""
         trace_id = trace_id or new_trace_id()
 
-        where = None
+        where_conditions = []
+
+        if owner_id:
+            where_conditions.append({"owner_id": owner_id})
 
         if document_id:
-            where = {"document_id": document_id}
+            where_conditions.append({"document_id": document_id})
+
+        if not where_conditions:
+            where = None
+        elif len(where_conditions) == 1:
+            where = where_conditions[0]
+        else:
+            where = {"$and": where_conditions}
 
         candidate_k = max(top_k * 3, 10)
 
@@ -238,6 +258,7 @@ class RAG:
             top_k=top_k,
             candidate_k=candidate_k,
             document_id=document_id,
+            owner_id=owner_id,
             enable_reranking=enable_reranking,
         )
 
@@ -505,6 +526,7 @@ class RAG:
         top_k: int = 3,
         conversation_history: list[dict] | None = None,
         document_id: str | None = None,
+        owner_id: str | None = None,
         enable_query_rewrite: bool = True,
         enable_multi_query: bool = True,
         enable_reranking: bool = True,
@@ -583,6 +605,7 @@ class RAG:
             search_queries=search_queries,
             top_k=top_k,
             document_id=document_id,
+            owner_id=owner_id,
             enable_reranking=enable_reranking,
             trace_id=trace_id,
         )

@@ -27,8 +27,12 @@ class FakeRagService:
         }
         self.calls = []
 
-    def answer(self, question, conversation_history=None, document_id=None, trace_id=None):
-        self.calls.append({"question": question, "conversation_history": conversation_history})
+    def answer(self, question, owner_id, conversation_history=None, document_id=None, trace_id=None):
+        self.calls.append({
+            "question": question,
+            "owner_id": owner_id,
+            "conversation_history": conversation_history,
+        })
         return self.response
 
 
@@ -46,8 +50,12 @@ class FakeAgentService:
         )
         self.calls = []
 
-    def run(self, user_query, conversation_context=None, trace_id=None):
-        self.calls.append({"user_query": user_query, "conversation_context": conversation_context})
+    def run(self, user_query, owner_id, conversation_context=None, trace_id=None):
+        self.calls.append({
+            "user_query": user_query,
+            "owner_id": owner_id,
+            "conversation_context": conversation_context,
+        })
         return self.agent_state
 
 

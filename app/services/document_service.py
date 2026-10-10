@@ -51,6 +51,7 @@ class DocumentService:
                 filename=filename,
                 store=self.rag.store,
                 embedder=self.rag.embedder,
+                owner_id=owner_id,
             )
         except (UnsupportedFileTypeError, DuplicateDocumentError, EmptyDocumentError, DocumentParsingError):
             if save_path.exists():
