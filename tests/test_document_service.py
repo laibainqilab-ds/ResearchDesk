@@ -18,7 +18,7 @@ from app.services.document_service import DocumentAccessDeniedError, DocumentSer
 
 
 def make_fake_ingest_file(result):
-    def fake_ingest_file(file_path, filename, store, embedder, trace_id=None):
+    def fake_ingest_file(file_path, filename, store, embedder, owner_id=None, trace_id=None):
         return result
 
     return fake_ingest_file
@@ -66,7 +66,7 @@ def test_ingest_saves_uploaded_bytes_under_throwaway_dir_not_real_data_dir(db_se
 
 
 def test_ingest_propagates_duplicate_error_and_cleans_up_saved_file(db_session, tmp_path, monkeypatch):
-    def failing_ingest(file_path, filename, store, embedder, trace_id=None):
+    def failing_ingest(file_path, filename, store, embedder, owner_id=None, trace_id=None):
         raise DuplicateDocumentError("doc1", filename, 5)
 
     monkeypatch.setattr(document_service_module, "DOCUMENTS_DIR", tmp_path)

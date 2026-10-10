@@ -25,12 +25,14 @@ class VectorStore:
     def count(self) -> int:
         return self.collection.count()
 
-    def list_documents(self) -> list[dict]:
-        """Return distinct documents currently indexed, derived from chunk metadata."""
+    def list_documents(self, owner_id: str | None = None) -> list[dict]:
+        """Return distinct documents currently indexed, derived from chunk
+        metadata. Restricted to `owner_id` when given."""
         if self.count() == 0:
             return []
 
-        records = self.collection.get(include=["metadatas"])
+        where = {"owner_id": owner_id} if owner_id else None
+        records = self.collection.get(where=where, include=["metadatas"])
 
         documents: dict[str, dict] = {}
 
@@ -68,17 +70,27 @@ class VectorStore:
         records = self.collection.get(where={"document_id": document_id})
         return len(records["ids"])
 
-    def get_document_chunks(self, document_id: str, page_number: int | None = None) -> list[dict]:
+    def get_document_chunks(
+        self,
+        document_id: str,
+        page_number: int | None = None,
+        owner_id: str | None = None,
+    ) -> list[dict]:
         """Exact (non-similarity) lookup of chunk records for a document,
-        optionally narrowed to one page.
+        optionally narrowed to one page and/or restricted to `owner_id`.
 
         Used by the agent tool layer's page-lookup tool so callers never
         need to touch `self.collection` directly. Returned in chunk_id order.
         """
+        conditions = [{"document_id": document_id}]
+
         if page_number is not None:
-            where = {"$and": [{"document_id": document_id}, {"page_number": page_number}]}
-        else:
-            where = {"document_id": document_id}
+            conditions.append({"page_number": page_number})
+
+        if owner_id:
+            conditions.append({"owner_id": owner_id})
+
+        where = conditions[0] if len(conditions) == 1 else {"$and": conditions}
 
         records = self.collection.get(where=where, include=["documents", "metadatas"])
 

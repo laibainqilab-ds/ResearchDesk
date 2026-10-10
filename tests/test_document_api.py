@@ -33,12 +33,12 @@ DEFAULT_INGEST_RESULT = {
 }
 
 
-def _fake_ingest_file(file_path, filename, store, embedder, trace_id=None):
+def _fake_ingest_file(file_path, filename, store, embedder, owner_id=None, trace_id=None):
     return dict(DEFAULT_INGEST_RESULT, filename=filename)
 
 
 def _raising_ingest_file(error):
-    def fake(file_path, filename, store, embedder, trace_id=None):
+    def fake(file_path, filename, store, embedder, owner_id=None, trace_id=None):
         raise error
 
     return fake

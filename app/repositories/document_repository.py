@@ -42,6 +42,24 @@ class DocumentRepository:
             )
             self.db.add(document)
         else:
+            # A row for this content hash already exists. The only way
+            # ingest_file() lets us reach this branch is if its own
+            # duplicate check (VectorStore.count_document_chunks) found zero
+            # chunks -- i.e. the previous owner deleted it (status ==
+            # "deleted") and the caller just re-embedded and re-tagged the
+            # Chroma chunks under the *current* owner_id. Postgres ownership
+            # must follow that fresh ingestion, or the two stores would
+            # disagree about who owns this content and the previous owner
+            # would keep (or regain) access to data they no longer hold.
+            #
+            # If the row is still "indexed" (active, not deleted) and owned
+            # by someone else, that would mean ingest_file's duplicate guard
+            # was bypassed -- in that one anomalous case we deliberately do
+            # NOT reassign ownership, so this method can never be used to
+            # silently hijack an active document away from its real owner.
+            if document.status == "deleted":
+                document.owner_id = owner_id
+
             document.filename = filename
             document.file_type = file_type
             document.page_count = page_count
