@@ -108,9 +108,13 @@ defects introduced by this run or by PR #23):
 - No logout or token-revocation mechanism exists (JWTs are stateless).
 - No direct single-document HTTP lookup endpoint exists.
 - Three `RetrievalTools` methods (`list_available_documents`,
-  `get_document_metadata`, `get_document_page`) exist and are correctly
-  owner-filtered, but are not wired to any HTTP route or reachable from the
-  live LangGraph agent graph — they were verified in-process only.
+  `get_document_metadata`, `get_document_page`) exist, are owner-filtered
+  by code, and are not wired to any HTTP route or reachable from the live
+  LangGraph agent graph. Only `get_document_metadata` and
+  `get_document_page` were actually exercised in-process during this QA
+  run (§3); `list_available_documents` was not called in this run and is
+  covered only by the separate automated unit-test suite, not by this QA
+  pass.
 
 **Untested in this run** (out of scope, not attempted):
 - Concurrent or simultaneous document uploads.
