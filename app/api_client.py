@@ -82,7 +82,8 @@ def list_messages(token: str, chat_id: str) -> list[dict]:
 def post_message(
     token: str, chat_id: str, content: str, mode: str, timeout_seconds: float | None = None
 ) -> dict:
-    with _client(timeout=timeout_seconds or DEFAULT_TIMEOUT_SECONDS) as client:
+    timeout = timeout_seconds if timeout_seconds is not None else DEFAULT_TIMEOUT_SECONDS
+    with _client(timeout=timeout) as client:
         return _handle(
             client.post(
                 f"/chats/{chat_id}/messages",
