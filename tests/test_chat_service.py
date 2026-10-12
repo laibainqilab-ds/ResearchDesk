@@ -229,3 +229,20 @@ def test_post_message_pulls_relevant_context_from_linked_chat(db_session):
 
     last_call_history = rag_service.calls[-1]["conversation_history"]
     assert any("quantum entanglement" in message["content"] for message in last_call_history)
+
+
+def test_post_message_does_not_pull_context_from_an_unlinked_chat(db_session):
+    rag_service = FakeRagService()
+    service, user = make_chat_service(db_session, rag_service=rag_service)
+    other_chat = service.create_chat(user.id)
+    main_chat = service.create_chat(user.id)
+
+    # Same keyword-overlap setup as the linked-chat test above -- these
+    # messages WOULD be picked up by select_relevant_history if a link
+    # existed. No link is created, so they must never appear.
+    service.post_message(other_chat.id, user.id, "cryptography blockchain protocol analysis", mode="rag")
+
+    service.post_message(main_chat.id, user.id, "cryptography blockchain protocol", mode="rag")
+
+    last_call_history = rag_service.calls[-1]["conversation_history"]
+    assert not any("cryptography" in message["content"] for message in last_call_history)
