@@ -20,8 +20,10 @@ class ApiError(Exception):
         self.detail = detail
 
 
-def _client() -> httpx.Client:
-    return httpx.Client(base_url=API_BASE_URL, timeout=120)
+DEFAULT_TIMEOUT_SECONDS = 120
+
+def _client(timeout: float = DEFAULT_TIMEOUT_SECONDS) -> httpx.Client:
+    return httpx.Client(base_url=API_BASE_URL, timeout=timeout)
 
 
 def _handle(response: httpx.Response):
@@ -77,8 +79,11 @@ def list_messages(token: str, chat_id: str) -> list[dict]:
         return _handle(client.get(f"/chats/{chat_id}/messages", headers=_auth_headers(token)))
 
 
-def post_message(token: str, chat_id: str, content: str, mode: str) -> dict:
-    with _client() as client:
+def post_message(
+    token: str, chat_id: str, content: str, mode: str, timeout_seconds: float | None = None
+) -> dict:
+    timeout = timeout_seconds if timeout_seconds is not None else DEFAULT_TIMEOUT_SECONDS
+    with _client(timeout=timeout) as client:
         return _handle(
             client.post(
                 f"/chats/{chat_id}/messages",

@@ -2,8 +2,11 @@ import streamlit as st
 
 from app import api_client
 from app.api_client import ApiError
+from app.chat_ui_helpers import agent_progress_outcome, find_run_by_trace_id
 from evaluation import report as evaluation_report
 from pathlib import Path
+
+AGENT_REQUEST_TIMEOUT_SECONDS = 300
 
 
 st.set_page_config(
@@ -320,7 +323,50 @@ if page == "Chat":
 
         question = st.chat_input("Ask a question about your documents")
 
-        if question:
+        if question and mode == "agent":
+            with st.status("Running the multi-agent workflow...", expanded=True) as status:
+                status.write(
+                    "This routes your question, gathers evidence (possibly across "
+                    "multiple sub-questions for complex queries), drafts an answer, "
+                    "and validates it before replying. This can take longer than "
+                    "Standard RAG."
+                )
+                result = None
+
+                try:
+                    result = api_client.post_message(
+                        st.session_state.token,
+                        st.session_state.current_chat_id,
+                        question,
+                        mode,
+                        timeout_seconds=AGENT_REQUEST_TIMEOUT_SECONDS,
+                    )
+                except ApiError as error:
+                    status.update(label="Request failed.", state="error")
+                    st.error(f"Request failed: {error.detail}")
+                except Exception:
+                    status.update(label="Request timed out or the connection failed.", state="error")
+                    st.error("The agent request did not finish in time. Please try again.")
+                else:
+                    run = None
+                    try:
+                        runs = api_client.list_runs(
+                            st.session_state.token, st.session_state.current_chat_id
+                        )
+                        run = find_run_by_trace_id(runs, result.get("trace_id"))
+                    except Exception:
+                        run = None  # Non-fatal -- the message itself already succeeded.
+
+                    state, label = agent_progress_outcome(result, run)
+                    status.update(label=label, state=state)
+
+                    if run and run.get("agent_trace"):
+                        for entry in run["agent_trace"]:
+                            status.write(f"- **{entry.get('stage', '?')}**: {entry.get('status', '?')}")
+
+                    refresh_messages()
+            st.rerun()
+        elif question:
             with st.spinner("Thinking..."):
                 try:
                     api_client.post_message(
@@ -328,6 +374,8 @@ if page == "Chat":
                     )
                 except ApiError as error:
                     st.error(f"Request failed: {error.detail}")
+                except Exception:
+                    st.error("The request did not finish in time. Please try again.")
                 else:
                     refresh_messages()
             st.rerun()
