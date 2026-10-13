@@ -9,7 +9,7 @@ AgentService never see one at all.
 import logging
 
 from app.agents.trace_view import summarize_workflow_run
-from app.db.models import Chat, Message, Run
+from app.db.models import Chat, Message, Run, _utcnow
 from app.observability import new_trace_id
 from app.rag import select_relevant_history
 from app.repositories.chat_repository import ChatRepository
@@ -22,6 +22,31 @@ from app.services.rag_service import RagService
 logger = logging.getLogger(__name__)
 
 MAX_CROSS_CHAT_CONTEXT_MESSAGES = 2
+
+# The ChatCreateRequest/api_client.py default -- every chat the UI creates
+# arrives here with exactly this title, since nothing currently lets a user
+# set one at creation time. Used as a sentinel so create_chat can replace it
+# with something distinguishable, while still respecting a genuinely custom
+# title (anything else) from a caller that does set one.
+DEFAULT_CHAT_TITLE = "New chat"
+
+MAX_GENERATED_TITLE_LENGTH = 60
+
+
+def _title_from_message(content: str) -> str | None:
+    """A concise, deterministic chat title from the user's first message --
+    no LLM call: just the message itself, collapsed and truncated. Returns
+    None for whitespace-only content, so callers can leave the existing
+    title alone rather than overwrite it with an empty string."""
+    collapsed = " ".join(content.split())
+
+    if not collapsed:
+        return None
+
+    if len(collapsed) <= MAX_GENERATED_TITLE_LENGTH:
+        return collapsed
+
+    return collapsed[: MAX_GENERATED_TITLE_LENGTH - 1].rstrip() + "…"
 
 
 class ChatNotFoundError(Exception):
@@ -49,7 +74,20 @@ class ChatService:
 
     # -- Chat lifecycle ----------------------------------------------------
 
-    def create_chat(self, user_id: str, title: str = "New chat") -> Chat:
+    def create_chat(self, user_id: str, title: str = DEFAULT_CHAT_TITLE) -> Chat:
+        """A fresh chat with no messages yet.
+
+        An unmodified default title is replaced with a timestamp-stamped
+        placeholder (e.g. "Untitled chat — Oct 14, 03:34:07 PM") so that
+        creating several empty chats doesn't leave them all showing the
+        same indistinguishable name in the sidebar -- distinguishable from
+        the moment they're persisted, not just at display time. A caller
+        that explicitly passes something other than the default is assumed
+        to want that exact title and is never overridden.
+        """
+        if title == DEFAULT_CHAT_TITLE:
+            title = f"Untitled chat — {_utcnow():%b %d, %I:%M:%S %p}"
+
         return self.chats.create(user_id=user_id, title=title)
 
     def list_chats(self, user_id: str) -> list[Chat]:
@@ -143,6 +181,7 @@ class ChatService:
         trace_id = new_trace_id()
 
         prior_messages = self.messages.list_for_chat(chat_id)
+        is_first_message = not prior_messages
         conversation_history = [
             {"role": message.role, "content": message.content} for message in prior_messages
         ]
@@ -175,6 +214,18 @@ class ChatService:
             is_valid=result.get("is_valid"),
             agent_trace=result.get("agent_trace"),
         )
+
+        if is_first_message:
+            # Based only on the user's question, independent of whether
+            # generation succeeded -- the question itself is already
+            # meaningful content, and a failed answer shouldn't leave the
+            # chat stuck on its placeholder title. Nothing else can have
+            # set a title before this point (no rename feature exists), so
+            # this never overwrites anything a user explicitly chose.
+            generated_title = _title_from_message(content)
+
+            if generated_title:
+                self.chats.update_title(chat, generated_title)
 
         self.chats.touch(chat)
 

@@ -38,6 +38,10 @@ class ChatRepository:
         chat.updated_at = _utcnow()
         self.db.commit()
 
+    def update_title(self, chat: Chat, title: str) -> None:
+        chat.title = title
+        self.db.commit()
+
     def delete(self, chat: Chat) -> None:
         self.db.delete(chat)
         self.db.commit()

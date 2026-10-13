@@ -306,3 +306,162 @@ def test_post_message_does_not_pull_context_from_an_unlinked_chat(db_session):
 
     last_call_history = rag_service.calls[-1]["conversation_history"]
     assert not any("cryptography" in message["content"] for message in last_call_history)
+
+
+# ---------------------------------------------------------------------------
+# Chat titles (distinguishable empty chats, generated titles, persistence)
+# ---------------------------------------------------------------------------
+
+import re
+
+import app.services.chat_service as chat_service_module
+from app.services.chat_service import _title_from_message
+
+
+def test_title_from_message_returns_short_message_unchanged():
+    assert _title_from_message("What is Evo 2?") == "What is Evo 2?"
+
+
+def test_title_from_message_collapses_internal_whitespace():
+    assert _title_from_message("What   is\n\nEvo 2?") == "What is Evo 2?"
+
+
+def test_title_from_message_truncates_long_messages_with_ellipsis():
+    long_question = "A" * 100
+    title = _title_from_message(long_question)
+
+    assert len(title) == 60
+    assert title.endswith("…")
+    assert title[:-1] == "A" * 59
+
+
+def test_title_from_message_returns_none_for_whitespace_only():
+    assert _title_from_message("   \n\t  ") is None
+
+
+def test_create_chat_default_title_is_a_distinguishable_timestamped_placeholder(db_session):
+    service, user = make_chat_service(db_session)
+
+    chat = service.create_chat(user.id)
+
+    assert chat.title != "New chat"
+    assert re.match(r"^Untitled chat — \w+ \d+, \d{2}:\d{2}:\d{2} [AP]M$", chat.title)
+
+
+def test_create_chat_respects_an_explicitly_passed_title(db_session):
+    service, user = make_chat_service(db_session)
+
+    chat = service.create_chat(user.id, title="A genuinely custom title")
+
+    assert chat.title == "A genuinely custom title"
+
+
+def test_create_chat_placeholders_differ_when_created_at_different_times(db_session, monkeypatch):
+    """Empty chats remain distinguishable from each other: two chats created
+    at different moments get different persisted titles (not just a
+    different display-time computation)."""
+    from datetime import datetime, timezone
+
+    service, user = make_chat_service(db_session)
+
+    monkeypatch.setattr(chat_service_module, "_utcnow", lambda: datetime(2026, 10, 14, 10, 0, 0, tzinfo=timezone.utc))
+    first = service.create_chat(user.id)
+
+    monkeypatch.setattr(chat_service_module, "_utcnow", lambda: datetime(2026, 10, 14, 10, 5, 0, tzinfo=timezone.utc))
+    second = service.create_chat(user.id)
+
+    assert first.title != second.title
+
+
+def test_post_message_sets_a_real_title_from_the_first_user_message(db_session):
+    service, user = make_chat_service(db_session)
+    chat = service.create_chat(user.id)
+    assert chat.title != "What is Evo 2?"
+
+    service.post_message(chat.id, user.id, "What is Evo 2?", mode="rag")
+
+    updated = service.get_chat(chat.id, user.id)
+    assert updated.title == "What is Evo 2?"
+
+
+def test_post_message_sets_title_even_when_generation_fails(db_session):
+    rag_service = FakeRagService(response={
+        "answer": None,
+        "sources": [],
+        "citations": {"valid": [], "invalid": [], "citation_map": {}},
+        "retrieval": {},
+        "error": {"message": "Gemini unavailable"},
+    })
+    service, user = make_chat_service(db_session, rag_service=rag_service)
+    chat = service.create_chat(user.id)
+
+    service.post_message(chat.id, user.id, "What is Evo 2?", mode="rag")
+
+    updated = service.get_chat(chat.id, user.id)
+    assert updated.title == "What is Evo 2?"
+
+
+def test_post_message_agent_mode_also_sets_title_from_first_message(db_session):
+    service, user = make_chat_service(db_session)
+    chat = service.create_chat(user.id)
+
+    service.post_message(chat.id, user.id, "Summarize the uploaded documents", mode="agent")
+
+    updated = service.get_chat(chat.id, user.id)
+    assert updated.title == "Summarize the uploaded documents"
+
+
+def test_post_message_does_not_change_title_on_a_second_message(db_session):
+    service, user = make_chat_service(db_session)
+    chat = service.create_chat(user.id)
+
+    service.post_message(chat.id, user.id, "First question establishing the title", mode="rag")
+    service.post_message(chat.id, user.id, "A completely different second question", mode="rag")
+
+    updated = service.get_chat(chat.id, user.id)
+    assert updated.title == "First question establishing the title"
+
+
+def test_post_message_title_survives_reload_from_the_database(db_session):
+    """Persistence: the generated title is actually stored, not computed
+    only for the in-memory object returned by post_message."""
+    service, user = make_chat_service(db_session)
+    chat = service.create_chat(user.id)
+
+    service.post_message(chat.id, user.id, "Does this persist correctly?", mode="rag")
+
+    reloaded = ChatRepository(db_session).get(chat.id)
+    assert reloaded.title == "Does this persist correctly?"
+
+
+def test_list_chats_titles_are_distinguishable_for_multiple_empty_chats(db_session, monkeypatch):
+    from datetime import datetime, timezone
+
+    service, user = make_chat_service(db_session)
+
+    monkeypatch.setattr(chat_service_module, "_utcnow", lambda: datetime(2026, 10, 14, 9, 0, 0, tzinfo=timezone.utc))
+    service.create_chat(user.id)
+    monkeypatch.setattr(chat_service_module, "_utcnow", lambda: datetime(2026, 10, 14, 9, 1, 0, tzinfo=timezone.utc))
+    service.create_chat(user.id)
+    monkeypatch.setattr(chat_service_module, "_utcnow", lambda: datetime(2026, 10, 14, 9, 2, 0, tzinfo=timezone.utc))
+    service.create_chat(user.id)
+
+    titles = [chat.title for chat in service.list_chats(user.id)]
+    assert len(titles) == len(set(titles)), f"expected all-distinct titles, got {titles}"
+
+
+def test_existing_legacy_chat_with_literal_new_chat_title_is_handled_gracefully(db_session):
+    """Pre-fix rows (title literally "New chat", not the new timestamped
+    placeholder) must not break anything -- they're still valid chats that
+    can be fetched, messaged, and have their title generated normally on
+    first message, exactly like any other chat."""
+    service, user = make_chat_service(db_session)
+    legacy_chat = ChatRepository(db_session).create(user_id=user.id, title="New chat")
+
+    fetched = service.get_chat(legacy_chat.id, user.id)
+    assert fetched.title == "New chat"
+
+    service.post_message(legacy_chat.id, user.id, "A question in a legacy chat", mode="rag")
+
+    updated = service.get_chat(legacy_chat.id, user.id)
+    assert updated.title == "A question in a legacy chat"
