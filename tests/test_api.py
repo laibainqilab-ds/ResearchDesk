@@ -7,10 +7,12 @@ services, repositories) all run as in production.
 
 from unittest.mock import Mock
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_db, get_rag
+from app.api.routers import health as health_module
 from app.main import app
 
 
@@ -47,11 +49,135 @@ def signup_and_get_headers(client, email="user@example.com", password="password1
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_health(client):
+class _FakeCursor:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def execute(self, *args, **kwargs):
+        return None
+
+
+class _FakeConnection:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def cursor(self):
+        return _FakeCursor()
+
+
+def _fake_db_connect_success(*args, **kwargs):
+    """A fake psycopg.connect() that never touches the network -- health's
+    database check now bypasses the shared, SQLite-overridden SQLAlchemy
+    session entirely (see app/api/routers/health.py), so every health test
+    must mock at this boundary instead, or it would silently depend on a
+    real, live PostgreSQL server to pass."""
+    return _FakeConnection()
+
+
+def test_health(client, monkeypatch):
+    monkeypatch.setattr(health_module.psycopg, "connect", _fake_db_connect_success)
+
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {
+        "status": "ok",
+        "dependencies": {"database": "ok", "vector_store": "ok"},
+    }
+
+
+def test_health_database_check_requests_a_bounded_connect_and_statement_timeout(client, monkeypatch):
+    """Regression test for the hang fix's actual mechanism: a fresh
+    connection must be requested with an explicit connect_timeout (bounds
+    a stalled TCP handshake -- the dominant real-world "unreachable or
+    stalled" case) and statement_timeout (bounds the query itself in case
+    a connection succeeds but the server never responds). psycopg/libpq
+    enforce the real timing; a mocked unit test can't reproduce an actual
+    multi-second stall without making the suite slow and flaky, so this
+    verifies the call is correctly configured to request a bound, which is
+    what the fix actually changed."""
+    captured = {}
+
+    def fake_connect(conninfo, **kwargs):
+        captured.update(kwargs)
+        return _FakeConnection()
+
+    monkeypatch.setattr(health_module.psycopg, "connect", fake_connect)
+
+    client.get("/health")
+
+    assert captured["connect_timeout"] == health_module.DATABASE_HEALTH_CHECK_TIMEOUT_SECONDS
+    assert captured["connect_timeout"] <= 5, "a health check must stay fast"
+    assert (
+        f"statement_timeout={health_module.DATABASE_HEALTH_CHECK_TIMEOUT_SECONDS * 1000}"
+        in captured["options"]
+    )
+
+
+def test_health_reports_unhealthy_with_503_when_database_is_down(client, monkeypatch):
+    def fake_connect(*args, **kwargs):
+        raise psycopg.OperationalError("connection refused")
+
+    monkeypatch.setattr(health_module.psycopg, "connect", fake_connect)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "unhealthy"
+    assert body["dependencies"]["database"] == "unhealthy"
+    assert body["dependencies"]["vector_store"] == "ok"
+    # No connection string, stack trace, or raw exception text leaked.
+    assert "connection refused" not in response.text
+    assert "OperationalError" not in response.text
+
+
+def test_health_reports_unhealthy_with_503_when_database_connection_times_out(client, monkeypatch):
+    """The realistic failure shape once connect_timeout actually expires --
+    a stalled, not merely refused, connection -- distinct from the clean
+    "connection refused" case above. Both are handled by the same generic
+    except clause in _check_database, so this also confirms that catch is
+    broad enough for the real exception psycopg/libpq raise here."""
+    def fake_connect(*args, **kwargs):
+        raise psycopg.OperationalError("connection timeout expired")
+
+    monkeypatch.setattr(health_module.psycopg, "connect", fake_connect)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "unhealthy"
+    assert body["dependencies"]["database"] == "unhealthy"
+    assert "timeout expired" not in response.text
+
+
+def test_health_reports_unhealthy_with_503_when_vector_store_is_down(client, monkeypatch):
+    monkeypatch.setattr(health_module.psycopg, "connect", _fake_db_connect_success)
+
+    class _BrokenRag:
+        class store:
+            class client:
+                @staticmethod
+                def heartbeat():
+                    raise RuntimeError("chroma unavailable")
+
+    app.dependency_overrides[get_rag] = lambda: _BrokenRag()
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "unhealthy"
+    assert body["dependencies"]["database"] == "ok"
+    assert body["dependencies"]["vector_store"] == "unhealthy"
+    assert "chroma unavailable" not in response.text
 
 
 def test_signup_then_login(client):
@@ -125,6 +251,69 @@ def test_post_rag_message_persists_and_returns_answer(client):
     runs = client.get(f"/chats/{chat_id}/runs", headers=headers).json()
     assert len(runs) == 1
     assert runs[0]["mode"] == "rag"
+
+
+def test_get_chat_returns_full_message_history_in_order(client):
+    headers = signup_and_get_headers(client)
+    chat_id = client.post("/chats", json={"title": "c"}, headers=headers).json()["id"]
+
+    client.post(
+        f"/chats/{chat_id}/messages", json={"content": "first question", "mode": "rag"}, headers=headers
+    )
+    client.post(
+        f"/chats/{chat_id}/messages", json={"content": "second question", "mode": "rag"}, headers=headers
+    )
+
+    response = client.get(f"/chats/{chat_id}", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == chat_id
+    assert "title" in body and "created_at" in body and "updated_at" in body
+    roles = [m["role"] for m in body["messages"]]
+    assert roles == ["user", "assistant", "user", "assistant"]
+    contents = [m["content"] for m in body["messages"]]
+    assert contents[0] == "first question"
+    assert contents[2] == "second question"
+    assert body["messages"][1]["sources"][0]["document_id"] == "doc1"
+
+
+def test_get_chat_returns_empty_messages_for_a_new_chat(client):
+    headers = signup_and_get_headers(client)
+    chat_id = client.post("/chats", json={"title": "empty"}, headers=headers).json()["id"]
+
+    response = client.get(f"/chats/{chat_id}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["messages"] == []
+
+
+def test_get_chat_other_user_cannot_access(client):
+    headers1 = signup_and_get_headers(client, "owner@example.com")
+    headers2 = signup_and_get_headers(client, "intruder@example.com")
+    chat_id = client.post("/chats", json={"title": "private"}, headers=headers1).json()["id"]
+    client.post(
+        f"/chats/{chat_id}/messages", json={"content": "secret", "mode": "rag"}, headers=headers1
+    )
+
+    response = client.get(f"/chats/{chat_id}", headers=headers2)
+
+    assert response.status_code == 404
+
+
+def test_get_chat_does_not_duplicate_messages_when_called_repeatedly(client):
+    headers = signup_and_get_headers(client)
+    chat_id = client.post("/chats", json={"title": "c"}, headers=headers).json()["id"]
+    client.post(
+        f"/chats/{chat_id}/messages", json={"content": "q", "mode": "rag"}, headers=headers
+    )
+
+    first = client.get(f"/chats/{chat_id}", headers=headers).json()
+    second = client.get(f"/chats/{chat_id}", headers=headers).json()
+
+    assert len(first["messages"]) == 2
+    assert len(second["messages"]) == 2
+    assert [m["id"] for m in first["messages"]] == [m["id"] for m in second["messages"]]
 
 
 def test_other_user_cannot_access_chat(client):

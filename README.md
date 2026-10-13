@@ -76,7 +76,7 @@ PostgreSQL, ChromaDB, or Gemini connectivity (`app/api/routers/health.py`).
 pytest
 ```
 
-397 tests. The suite is self-contained — `tests/conftest.py` provisions an
+449 tests. The suite is self-contained — `tests/conftest.py` provisions an
 isolated in-memory SQLite database per test and uses fake embedding/generation
 components, so no live PostgreSQL, ChromaDB, or Gemini access is required to
 run it. A `.env` with a valid `DATABASE_URL` must still exist, since
@@ -84,4 +84,8 @@ importing `app.main` (used by the API test client) imports `app.db.session`,
 which raises immediately if `DATABASE_URL` is unset.
 
 ---
-Last verified against commit `9eb475b` (2026-10-11).
+Last verified on branch `fix/architecture-compliance-gaps` (2026-10-13),
+449 tests passing (`pytest -q`) -- includes new unit tests for `clean_text`
+and `chunk_pages` (`tests/test_text_cleaner.py`, `tests/test_chunker.py`).
+Not yet committed at the time of this update -- the commit hash this
+applies to will be the one that includes this change.

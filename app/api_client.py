@@ -74,6 +74,13 @@ def delete_chat(token: str, chat_id: str) -> None:
         _handle(client.delete(f"/chats/{chat_id}", headers=_auth_headers(token)))
 
 
+def get_chat(token: str, chat_id: str) -> dict:
+    """Resuming a chat: returns the chat plus its full message history in
+    one call (GET /chats/{chat_id}), per the architecture doc."""
+    with _client() as client:
+        return _handle(client.get(f"/chats/{chat_id}", headers=_auth_headers(token)))
+
+
 def list_messages(token: str, chat_id: str) -> list[dict]:
     with _client() as client:
         return _handle(client.get(f"/chats/{chat_id}/messages", headers=_auth_headers(token)))

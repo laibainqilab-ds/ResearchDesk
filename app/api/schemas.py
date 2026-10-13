@@ -56,6 +56,16 @@ class MessageOut(BaseModel):
     sources: list[MessageSourceOut] = Field(default_factory=list)
 
 
+class ChatDetailOut(ChatOut):
+    """GET /chats/{chat_id}'s response: the chat plus its full message
+    history (per the architecture doc -- "loads a chat's full history" /
+    "pull every message for that id out of the database, ordered by
+    time"). Superset of ChatOut, so existing ChatOut-only consumers of
+    this endpoint's prior fields are unaffected."""
+
+    messages: list[MessageOut] = Field(default_factory=list)
+
+
 class PostMessageRequest(BaseModel):
     content: str = Field(min_length=1)
     mode: Literal["rag", "agent"] = "rag"

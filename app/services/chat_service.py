@@ -120,9 +120,24 @@ class ChatService:
     # -- Messages ------------------------------------------------------------
 
     def post_message(self, chat_id: str, user_id: str, content: str, mode: str) -> dict:
-        """Persist the user message, run RAG or Agent mode, persist the
-        assistant message + sources + a compact Run record, and return a
-        response payload for the API layer."""
+        """Run RAG or Agent mode, then -- once an answer comes back -- persist
+        both the user message and the assistant message together, plus
+        sources and a compact Run record, and return a response payload for
+        the API layer.
+
+        Per the architecture doc (section 6, "Asking a question"): history
+        is pulled from Postgres first, handed to RAG/Agent Service, and
+        "once it gets an answer back it saves both the user's message and
+        the assistant's reply" -- not the user's message immediately,
+        before generation runs. A generation failure that's caught
+        gracefully (GenerationUnavailableError, surfaced as
+        result["is_error"]) still reaches this point normally, so both
+        messages and the run are still saved together. An unexpected,
+        uncaught exception during the RAG/Agent call -- not the documented
+        failure path -- means neither message is persisted; the doc does
+        not describe that case, and this is the accepted, documented
+        trade-off rather than an oversight.
+        """
         chat = self.get_chat(chat_id, user_id)
 
         trace_id = new_trace_id()
@@ -133,12 +148,12 @@ class ChatService:
         ]
         cross_chat_context = self._gather_cross_chat_context(chat_id, content)
 
-        self.messages.add_user_message(chat_id, content)
-
         if mode == "agent":
             result = self._run_agent(content, conversation_history + cross_chat_context, trace_id, user_id)
         else:
             result = self._run_rag(content, conversation_history + cross_chat_context, trace_id, user_id)
+
+        self.messages.add_user_message(chat_id, content)
 
         assistant_message = self.messages.add_assistant_message(
             chat_id=chat_id,

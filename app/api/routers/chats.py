@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.deps import get_chat_service, get_current_user
 from app.api.schemas import (
     ChatCreateRequest,
+    ChatDetailOut,
     ChatOut,
     ContextLinkCreateRequest,
     ContextLinkOut,
@@ -38,17 +39,22 @@ def list_chats(
     return [ChatOut.model_validate(chat) for chat in chat_service.list_chats(user.id)]
 
 
-@router.get("/{chat_id}", response_model=ChatOut)
+@router.get("/{chat_id}", response_model=ChatDetailOut)
 def get_chat(
     chat_id: str,
     user: User = Depends(get_current_user),
     chat_service: ChatService = Depends(get_chat_service),
-) -> ChatOut:
+) -> ChatDetailOut:
+    """Resuming a chat: per the architecture doc, this is the single call
+    that "pulls every message for that id out of the database, ordered by
+    time" -- chat.messages is already ordered by created_at (see
+    app/db/models.py), so Pydantic's from_attributes resolves the full
+    history directly off the ORM relationship, no separate query needed."""
     try:
         chat = chat_service.get_chat(chat_id, user.id)
     except ChatNotFoundError:
         raise _not_found()
-    return ChatOut.model_validate(chat)
+    return ChatDetailOut.model_validate(chat)
 
 
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)

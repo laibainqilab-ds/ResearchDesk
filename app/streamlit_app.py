@@ -161,9 +161,8 @@ def refresh_messages() -> None:
     if st.session_state.current_chat_id is None:
         st.session_state.messages = []
         return
-    st.session_state.messages = api_client.list_messages(
-        st.session_state.token, st.session_state.current_chat_id
-    )
+    chat = api_client.get_chat(st.session_state.token, st.session_state.current_chat_id)
+    st.session_state.messages = chat["messages"]
 
 
 # ---------------------------------------------------------------------------
