@@ -119,7 +119,7 @@ defects introduced by this run or by PR #23):
 **Untested in this run** (out of scope, not attempted):
 - Concurrent or simultaneous document uploads.
 - Large or multi-page documents.
-- Cross-chat context linking.
+- Cross-chat context linking (since verified live in a later session — see §8).
 - The LangGraph "research" (multi-subquestion) route.
 
 ## 7. Readiness assessment
@@ -136,3 +136,34 @@ one document, two accounts, and a deliberately narrow set of interactions.
 Before treating the application as broadly production-ready, the design
 limitations in §6 (particularly the absence of account deletion) and the
 untested areas should be addressed or explicitly accepted as known gaps.
+
+## 8. Addendum (2026-10-12) — Cross-chat context linking, verified live
+
+Performed in a separate, later session against the real stack (real
+PostgreSQL, real Gemini), reusing the disposable acceptance-test account and
+chats created for the original audit, not part of the run recorded in §1-7
+above.
+
+**Setup:** an existing chat ("chat D") was linked (`POST
+/chats/{id}/context-links`) to a second existing chat ("chat A") containing
+a planted fact from an earlier exchange. Chat D had no messages of its own.
+
+**Test:** sent one message in chat D with no answerable content of its own
+-- a pronoun-based follow-up ("What was that value you mentioned earlier?")
+with no antecedent inside chat D itself, so a correct answer could only
+come from chat A's content reaching generation through the link.
+
+**Result:** the persisted run record's `rewritten_question` resolved the
+pronoun into language drawn from chat A's conversation ("What is the
+acceptance-test control value mentioned in the documents?"), and the final
+generated answer correctly stated the planted fact with a correct citation.
+This is real evidence that linked-chat content reaches query rewriting and
+the final generated answer, not just the context-gathering step in
+isolation (which was verified separately, read-only, against the same real
+data, by calling `ChatService._gather_cross_chat_context` directly and
+confirming it returns the right content for a linked chat and nothing for
+an unlinked one).
+
+**Not retested:** the LangGraph "research" (multi-subquestion) route
+remains untested against the live stack (§6) -- this addendum covers only
+cross-chat context linking.

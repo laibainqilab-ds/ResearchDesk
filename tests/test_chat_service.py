@@ -117,6 +117,66 @@ def test_post_message_rag_persists_user_and_assistant_messages(db_session):
     assert messages[0].content == "What is the answer?"
 
 
+def test_post_message_does_not_persist_user_message_before_generation_completes(db_session):
+    """Per the architecture doc (section 6): messages are saved together,
+    once an answer comes back -- not the user's message immediately,
+    before RAG/Agent runs. A RagService that inspects persisted state at
+    call-time proves the ordering; checking only the final state (as the
+    other tests here do) wouldn't catch a reversion, since the end result
+    looks identical either way."""
+    service, user = make_chat_service(db_session)
+    chat = service.create_chat(user.id)
+    seen_message_count_at_generation_time = []
+
+    class OrderCheckingRagService(FakeRagService):
+        def answer(self, question, owner_id, conversation_history=None, document_id=None, trace_id=None):
+            seen_message_count_at_generation_time.append(len(service.messages.list_for_chat(chat.id)))
+            return super().answer(question, owner_id, conversation_history, document_id, trace_id)
+
+    service.rag_service = OrderCheckingRagService()
+    service.post_message(chat.id, user.id, "q", mode="rag")
+
+    assert seen_message_count_at_generation_time == [0]
+
+    messages = service.list_messages(chat.id, user.id)
+    assert [message.role for message in messages] == ["user", "assistant"]
+
+
+def test_post_message_agent_does_not_persist_user_message_before_generation_completes(db_session):
+    service, user = make_chat_service(db_session)
+    chat = service.create_chat(user.id)
+    seen_message_count_at_generation_time = []
+
+    class OrderCheckingAgentService(FakeAgentService):
+        def run(self, user_query, owner_id, conversation_context=None, trace_id=None):
+            seen_message_count_at_generation_time.append(len(service.messages.list_for_chat(chat.id)))
+            return super().run(user_query, owner_id, conversation_context, trace_id)
+
+    service.agent_service = OrderCheckingAgentService()
+    service.post_message(chat.id, user.id, "q", mode="agent")
+
+    assert seen_message_count_at_generation_time == [0]
+
+
+def test_post_message_persists_both_messages_together_even_on_generation_failure(db_session):
+    rag_service = FakeRagService(response={
+        "answer": None,
+        "sources": [],
+        "citations": {"valid": [], "invalid": [], "citation_map": {}},
+        "retrieval": {},
+        "error": {"message": "Gemini unavailable"},
+    })
+    service, user = make_chat_service(db_session, rag_service=rag_service)
+    chat = service.create_chat(user.id)
+
+    service.post_message(chat.id, user.id, "q", mode="rag")
+
+    messages = service.list_messages(chat.id, user.id)
+    assert [message.role for message in messages] == ["user", "assistant"]
+    assert messages[0].content == "q"
+    assert messages[1].is_error is True
+
+
 def test_post_message_rag_records_a_run_with_retrieval_payload(db_session):
     service, user = make_chat_service(db_session)
     chat = service.create_chat(user.id)
