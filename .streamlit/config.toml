@@ -1,0 +1,38 @@
+# ResearchDesk look and feel ("Refined dark").
+# Streamlit reads this file from the folder you run `streamlit run` in, so
+# start the frontend from the repo root (as the README already says).
+# Written against Streamlit 1.65; check yours with `pip show streamlit`.
+
+[theme]
+base = "dark"
+primaryColor = "#3DD6B5"                 # the one accent colour
+backgroundColor = "#0E1116"
+secondaryBackgroundColor = "#1C2330"     # inputs, expanders, message cards
+textColor = "#E8EBF2"
+linkColor = "#3DD6B5"
+borderColor = "#262D3A"
+baseRadius = "0.625rem"
+buttonRadius = "0.625rem"
+showSidebarBorder = true
+
+# Shared widgets, so every page matches: calmer metric numbers, info banners
+# in the accent colour (st.info uses the "blue" slot), tables in the same
+# border and header colours as the cards.
+blueColor = "#3DD6B5"
+metricValueFontSize = "1.6rem"
+metricValueFontWeight = 600
+dataframeBorderColor = "#262D3A"
+dataframeHeaderBackgroundColor = "#1C2330"
+
+# Type: DM Sans for text, DM Mono for IDs and code. Both load from Google
+# Fonts; if they cannot load (offline), the browser falls back to sans-serif.
+font = "DM Sans:https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"
+codeFont = "'DM Mono':https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap"
+baseFontSize = 15
+headingFontSizes = ["1.7rem", "1.4rem", "1.2rem", "1.05rem", "1rem", "0.9rem"]
+headingFontWeights = 600
+
+[theme.sidebar]
+backgroundColor = "#12161D"
+secondaryBackgroundColor = "#1C2330"
+borderColor = "#232A36"
